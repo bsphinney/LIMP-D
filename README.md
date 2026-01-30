@@ -13,14 +13,20 @@
 * **Interactive Trends:** Sort QC metrics (Precursors, Proteins, MS1) by Run Order or Experimental Group.
 * **Group Distributions:** Jittered Violin plots to instantly spot batch effects or failing experimental groups.
 
-### 3. AI Data Chat (Gemini Powered)
-* **Bidirectional:** Select proteins in the Volcano Plot $\leftrightarrow$ Ask about them in the Chat.
-* **Token-Safe Analysis:** Uses a "Smart Context" system that uploads the Top 800 significant proteins + your manual selections directly to Google's File API, bypassing standard context limits.
-* **Context Aware:** The AI receives your full QC table and Experimental Design, allowing it to answer technical questions (e.g., "Which group has the lowest MS1 signal?").
-
 ### 4. Robust Biomarker Discovery
 * **Consistent DE Panel:** Ranks significant proteins by **%CV (Coefficient of Variation)** to identify the most stable, reproducible markers across replicates.
 * **Reproducibility:** Automatically generates the R code required to reproduce your specific analysis in a standalone script.
+
+### 5. Gene Set Enrichment Analysis (GSEA)
+* **Powered by `clusterProfiler`:** Performs Gene Ontology (GO) enrichment analysis on ranked gene lists from DE results.
+* **Smart Organism Detection:** Automatically identifies the organism (e.g., Human, Mouse, Rat, etc.) based on protein IDs and loads the correct Bioconductor annotation database (`OrgDb`).
+* **Interactive Visualizations:** Explore enrichment results with:
+    *   **Dot Plot:** Overview of enriched GO terms.
+    *   **Enrichment Map:** Network visualization of overlapping enriched terms.
+    *   **Ridgeplot:** Shows expression distribution of core enriched genes across terms.
+
+### 6. AI Data Chat (Gemini Powered)
+* **Bidirectional:** Select proteins in the Volcano Plot $\leftrightarrow$ Ask about them in the Chat.
 
 ---
 
@@ -34,4 +40,4 @@ Run this command in your R console to install all dependencies:
 
 ```r
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-BiocManager::install(c("limma", "limpa", "ComplexHeatmap", "shiny", "shinyjs", "plotly", "DT", "tidyr", "tibble", "stringr", "curl", "bslib", "arrow"))
+BiocManager::install(c("limma", "limpa", "ComplexHeatmap", "shiny", "shinyjs", "plotly", "DT", "tidyr", "tibble", "stringr", "curl", "bslib", "arrow", "clusterProfiler", "AnnotationDbi", "org.Hs.eg.db", "org.Mm.eg.db", "enrichplot", "ggridges"))
