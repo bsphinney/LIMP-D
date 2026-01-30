@@ -207,7 +207,7 @@ ui <- page_sidebar(
     passwordInput("user_api_key", "Gemini API Key", value = "", placeholder = "AIzaSy..."),
     actionButton("check_models", "Check Models", class="btn-warning btn-xs w-100"),
     br(), br(),
-    textInput("model_name", "Model Name", value = "gemini-1.5-flash", placeholder = "gemini-1.5-flash")
+    textInput("model_name", "Model Name", value = "gemini-3-flash-preview", placeholder = "gemini-1.5-flash")
   ),
   
   navset_card_tab(
