@@ -249,7 +249,7 @@ ui <- page_sidebar(
     
     nav_panel("DE Dashboard", icon = icon("table-columns"),
               layout_columns(col_widths = c(6, 6),
-                             card(card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Results Table"), div(actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"), actionButton("show_violin", "📊 Violin Plot", class="btn-primary btn-xs"), downloadButton("download_results", "💾 Export Results", class="btn-success btn-xs")))), DTOutput("de_table")),
+                             card(card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Results Table"), div(actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"), actionButton("show_violin", "📊 Violin Plot", class="btn-primary btn-xs"), downloadButton("download_result_csv", "💾 Export Results", class="btn-success btn-xs")))), DTOutput("de_table")),
                              card(card_header("Volcano Plot (Click/Box Select to Filter Table)"), plotlyOutput("volcano_plot_interactive", height = "600px"))),
               card(card_header("Heatmap"), plotOutput("heatmap_plot", height="400px"))),
     
@@ -268,7 +268,7 @@ ui <- page_sidebar(
     
     nav_panel("Data Chat", icon = icon("comments"),
               card(
-                card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Chat with Full Data (QC + Expression)"), downloadButton("download_chat", "💾 Save Chat", class="btn-secondary btn-sm"))),
+                card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Chat with Full Data (QC + Expression)"), downloadButton("download_chat_txt", "💾 Save Chat", class="btn-secondary btn-sm"))),
                 card_body(
                   verbatimTextOutput("chat_selection_indicator"),
                   uiOutput("chat_window"),
@@ -459,10 +459,13 @@ server <- function(input, output, session) {
   })
   
   # --- UPDATED: DOWNLOAD HANDLER (SAFE COLUMN NAMES) ---
-  output$download_results <- downloadHandler(
-    filename = function() { paste0("Limpa_Results_", make.names(input$contrast_selector), ".csv") },
+  output$download_result_csv <- downloadHandler(
+    filename = function() {
+      req(input$contrast_selector)
+      paste0("Limpa_Results_", make.names(input$contrast_selector), ".csv")
+    },
     content = function(file) {
-      req(values$fit, values$y_protein)
+      req(values$fit, values$y_protein, input$contrast_selector)
       
       # 1. Get stats using Safe Temp ID
       de_stats <- topTable(values$fit, coef=input$contrast_selector, number=Inf)
@@ -484,8 +487,7 @@ server <- function(input, output, session) {
       
       write.csv(full_data, file, row.names=FALSE)
     }
-  )
-  
+  )  
   output$reproducible_code <- renderText({ req(values$metadata, input$contrast_selector); groups_vec <- paste(sprintf("'%s' = '%s'", values$metadata$File.Name, values$metadata$Group), collapse=",\n  "); script <- paste0("# Reproducibility Script\nlibrary(limpa); library(limma); library(dplyr)\n\ndat <- readDIANN('report.parquet', format='parquet', q.cutoffs=", input$q_cutoff, ")\ngroup_map <- c(\n  ", groups_vec, "\n)\nmetadata <- data.frame(File.Name = names(group_map), Group = group_map)\nmetadata <- metadata[match(colnames(dat$E), metadata$File.Name), ]\ndpcfit <- dpc(dat)\ny_protein <- dpcQuant(dat, 'Protein.Group', dpc=dpcfit)\ngroups <- factor(metadata$Group)\ndesign <- model.matrix(~ 0 + groups); colnames(design) <- levels(groups)\nfit <- dpcDE(y_protein, design, plot=FALSE)\ncont <- makeContrasts(", input$contrast_selector, ", levels=design)\nfit <- contrasts.fit(fit, cont); fit <- eBayes(fit)\nresults <- topTable(fit, number=Inf)\n"); return(script) })
   
   observeEvent(input$check_models, { if (nchar(input$user_api_key) < 10) { showNotification("Please enter a valid API Key first.", type="error"); return() }; withProgress(message = "Checking Google Models...", { models <- list_google_models(input$user_api_key); if (length(models) > 0 && !grepl("Error", models[1])) { showModal(modalDialog(title = "Available Models for Your Key", p("Copy one of these into the Model Name box:"), tags$textarea(paste(models, collapse="\n"), rows=10, style="width:100%;"), easyClose = TRUE)) } else { showNotification(paste("Failed to list models:", models), type="error") } }) })
@@ -552,7 +554,20 @@ server <- function(input, output, session) {
   })
   
   output$chat_window <- renderUI({ chat_content <- lapply(values$chat_history, function(msg) { if (msg$role == "user") { div(class = "user-msg", span(msg$content)) } else { div(class = "ai-msg", span(markdown(msg$content))) } }); div(class = "chat-container", chat_content) })
-  output$download_chat <- downloadHandler(filename = function() { paste0("Limpa_Chat_History_", Sys.Date(), ".txt") }, content = function(file) { text_out <- sapply(values$chat_history, function(msg) { role <- if(msg$role == "user") "YOU: " else "GEMINI: "; paste0(role, msg$content, "\n--------------------------------------------------\n") }); writeLines(unlist(text_out), file) })
+  output$download_chat_txt <- downloadHandler(
+  filename = function() {
+    req(values$chat_history)
+    paste0("Limpa_Chat_History_", Sys.Date(), ".txt")
+  },
+  content = function(file) {
+    req(values$chat_history)
+    text_out <- sapply(values$chat_history, function(msg) {
+      role <- if(msg$role == "user") "YOU: " else "GEMINI: "
+      paste0(role, msg$content, "\n--------------------------------------------------\n")
+    })
+    writeLines(unlist(text_out), file)
+  }
+)
 }
 
 shinyApp(ui, server)
