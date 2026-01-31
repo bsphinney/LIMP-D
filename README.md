@@ -12,6 +12,10 @@
 ### 2. Deep Quality Control (QC)
 * **Interactive Trends:** Sort QC metrics (Precursors, Proteins, MS1) by Run Order or Experimental Group.
 * **Group Distributions:** Jittered Violin plots to instantly spot batch effects or failing experimental groups.
+* **Comprehensive Signal Overview:** Visualize the full dynamic range of protein signals across all groups.
+    *   **Dynamic Range Metric:** Quantitative display of the dataset's signal dynamic range in orders of magnitude.
+    *   **Interactive DE Coloring:** Toggle coloring of proteins by Differential Expression (DE) status (Up, Down, Not Significant).
+* **Grouped QC Summaries:** Instantly view average Precursors, MS1 Signal, and Protein Groups per experimental condition in a dedicated table.
 
 ### 4. Robust Biomarker Discovery
 * **Consistent DE Panel:** Ranks significant proteins by **%CV (Coefficient of Variation)** to identify the most stable, reproducible markers across replicates.
@@ -27,6 +31,8 @@
 
 ### 6. AI Data Chat (Gemini Powered)
 * **Bidirectional:** Select proteins in the Volcano Plot $\leftrightarrow$ Ask about them in the Chat.
+* **One-Click Summarization:** New 'Auto-Analyze' button prompts Gemini to summarize the dataset, highlight key biological/technical patterns, and identify interesting proteins.
+* **Enhanced Bidirectional Interaction:** AI-selected proteins are now highlighted in both the Volcano Plot and the Signal Distribution plot, creating a seamless feedback loop.
 
 ---
 
@@ -40,4 +46,4 @@ Run this command in your R console to install all dependencies:
 
 ```r
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-BiocManager::install(c("limma", "limpa", "ComplexHeatmap", "shiny", "shinyjs", "plotly", "DT", "tidyr", "tibble", "stringr", "curl", "bslib", "arrow", "clusterProfiler", "AnnotationDbi", "org.Hs.eg.db", "org.Mm.eg.db", "enrichplot", "ggridges"))
+BiocManager::install(c("limma", "limpa", "ComplexHeatmap", "shiny", "shinyjs", "plotly", "DT", "tidyr", "tibble", "stringr", "curl", "bslib", "arrow", "clusterProfiler", "AnnotationDbi", "org.Hs.eg.db", "org.Mm.eg.db", "enrichplot", "ggridges", "ggrepel"))
