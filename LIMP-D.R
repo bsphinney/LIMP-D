@@ -1,6 +1,6 @@
 # ==============================================================================
 #  Limpa Proteomics Analysis App (LIMP-D)
-#  Status: Production Ready (All Fixes Applied)
+#  Status: Production Ready (Grid View Links + Interactions)
 # ==============================================================================
 
 # --- 1. AUTO-INSTALLATION & SETUP ---
@@ -267,7 +267,10 @@ ui <- page_sidebar(
     id = "main_tabs", 
     
     nav_panel("Data Overview", icon = icon("database"),
-              actionButton("show_summary_modal", "View Full Summary", icon = icon("list-alt"), class = "btn-primary w-100"),
+              div(style="display: flex; gap: 10px; margin-bottom: 10px;",
+                  actionButton("show_summary_modal", "View Full Summary", icon = icon("list-alt"), class = "btn-primary w-50"),
+                  actionButton("show_grid_view", "Open Grid View", icon = icon("th"), class = "btn-success w-50")
+              ),
               card(
                 card_header("Signal Distribution Across All Protein Groups"),
                 card_body(
@@ -399,7 +402,8 @@ server <- function(input, output, session) {
     plot_selected_proteins = NULL, chat_history = list(),
     current_file_uri = NULL, gsea_results = NULL,
     repro_log = character(0),
-    color_plot_by_de = FALSE
+    color_plot_by_de = FALSE,
+    grid_selected_protein = NULL # Specific tracker for grid view interaction
   )
   
   # ============================================================================
@@ -560,6 +564,9 @@ server <- function(input, output, session) {
     })
     
     if (!is.null(id_map)) {
+      # FIXED: Ensure 1-to-1 mapping by taking distinct UNIPROT keys
+      id_map <- id_map %>% distinct(UNIPROT, .keep_all = TRUE)
+      
       df <- df %>% left_join(id_map, by = c("Accession" = "UNIPROT")) %>%
         mutate(
           Gene = ifelse(is.na(SYMBOL), Accession, SYMBOL),
@@ -603,6 +610,163 @@ server <- function(input, output, session) {
     showModal(modalDialog(title = "Dataset Summary", tagList(summary_elements), easyClose = TRUE, footer = modalButton("Close")))
   })
   
+  # --- GRID VIEW & PLOT LOGIC ---
+  
+  # Reactive Data Generator for Grid View (to ensure consistency)
+  grid_react_df <- reactive({
+    req(values$fit, values$y_protein, values$metadata, input$contrast_selector)
+    
+    # 1. Get Base Data
+    df_volc <- volcano_data()
+    df_exprs <- as.data.frame(values$y_protein$E) %>% rownames_to_column("Protein.Group")
+    
+    # 2. Join
+    df_merged <- left_join(df_volc, df_exprs, by="Protein.Group")
+    
+    # 3. Sort Columns by Group
+    meta_sorted <- values$metadata %>% arrange(Group, File.Name)
+    ordered_files <- meta_sorted$File.Name
+    valid_cols <- intersect(ordered_files, colnames(df_exprs))
+    
+    # 4. Generate Short Column Headers (Run IDs)
+    run_ids <- values$metadata$ID[match(valid_cols, values$metadata$File.Name)]
+    new_headers <- as.character(run_ids)
+    
+    # Select final columns
+    df_final <- df_merged %>%
+      dplyr::select(Protein.Group, Gene, Protein.Name, Significance, logFC, adj.P.Val, all_of(valid_cols)) %>%
+      mutate(across(where(is.numeric), ~round(., 2)))
+    
+    # Store 'Original.ID' for linking
+    df_final$Original.ID <- df_final$Protein.Group
+    
+    # Rename Expression Columns
+    fixed_cols <- c("Protein.Group", "Gene", "Protein.Name", "Significance", "logFC", "adj.P.Val")
+    colnames(df_final) <- c(fixed_cols, new_headers, "Original.ID")
+    
+    list(
+      data = df_final, 
+      fixed_cols = fixed_cols, 
+      expr_cols = new_headers, 
+      valid_cols_map = valid_cols, # The real filenames for tooltips
+      meta_sorted = meta_sorted    # Metadata ordered by group
+    )
+  })
+  
+  observeEvent(input$show_grid_view, {
+    showModal(modalDialog(
+      title = "Expression Grid View (Click Row for Plot)", size = "xl",
+      DTOutput("grid_view_table"),
+      footer = modalButton("Close"),
+      easyClose = TRUE
+    ))
+  })
+  
+  output$grid_view_table <- renderDT({
+    gdata <- grid_react_df()
+    df_display <- gdata$data
+    
+    # Add Hyperlinks to Protein.Group (and remove helper col from view)
+    acc <- str_split_fixed(df_display$Original.ID, "[; ]", 2)[,1]
+    df_display$Protein.Group <- paste0("<a href='https://www.uniprot.org/uniprotkb/", acc, "/entry' target='_blank'>", df_display$Protein.Group, "</a>")
+    
+    # Exclude helper column for display
+    df_display <- df_display %>% dplyr::select(-Original.ID)
+    
+    fixed_cols <- gdata$fixed_cols
+    expr_cols <- gdata$expr_cols
+    valid_cols_map <- gdata$valid_cols_map
+    meta_sorted <- gdata$meta_sorted
+    
+    # --- COLOR LOGIC FOR HEADERS (BY CONDITION) ---
+    unique_groups <- unique(meta_sorted$Group)
+    group_colors <- setNames(rainbow(length(unique_groups), v=0.85, s=0.8), unique_groups)
+    
+    header_html <- tags$table(
+      class = "display",
+      tags$thead(
+        tags$tr(
+          lapply(seq_along(colnames(df_display)), function(i) {
+            col_name <- colnames(df_display)[i]
+            if (i > length(fixed_cols)) {
+              # Expression Column
+              original_name <- valid_cols_map[i - length(fixed_cols)]
+              grp <- meta_sorted$Group[meta_sorted$File.Name == original_name]
+              bg_color <- group_colors[grp]
+              tags$th(title = paste("File:", original_name, "\nGroup:", grp), col_name, style = paste0("background-color: ", bg_color, "; color: white; text-align: center; cursor: help;"))
+            } else {
+              tags$th(col_name)
+            }
+          })
+        )
+      )
+    )
+    
+    # --- COLOR LOGIC FOR CELLS ---
+    expression_matrix <- as.matrix(df_display[, expr_cols])
+    brks <- quantile(expression_matrix, probs = seq(.05, .95, .05), na.rm = TRUE)
+    clrs <- colorRampPalette(c("#4575b4", "white", "#d73027"))(length(brks) + 1)
+    
+    datatable(df_display, 
+              container = header_html, 
+              extensions = 'Buttons',  
+              selection = 'single', # Enable row selection
+              escape = FALSE,       # Render HTML links
+              options = list(
+                dom = 'Bfrtip',        
+                buttons = c('copy', 'csv', 'excel'),
+                pageLength = 15, 
+                scrollX = TRUE,
+                columnDefs = list(list(className = 'dt-center', targets = (length(fixed_cols)):(ncol(df_display)-1)))
+              ), 
+              rownames = FALSE) %>%
+      formatStyle(expr_cols, backgroundColor = styleInterval(brks, clrs))
+  })
+  
+  # Grid View Interactions - Click Row -> Open Plot
+  observeEvent(input$grid_view_table_rows_selected, {
+    req(grid_react_df())
+    selected_idx <- input$grid_view_table_rows_selected
+    
+    if (length(selected_idx) > 0) {
+      gdata <- grid_react_df()
+      # Get original ID from helper column (before HTML formatting)
+      selected_id <- gdata$data$Original.ID[selected_idx]
+      values$grid_selected_protein <- selected_id
+      
+      showModal(modalDialog(
+        title = paste("Expression Plot:", selected_id), size = "xl",
+        plotOutput("violin_plot_grid", height = "600px"),
+        footer = tagList(
+          actionButton("back_to_grid", "Back to Grid", class="btn-info"),
+          modalButton("Close")
+        ),
+        easyClose = TRUE
+      ))
+    }
+  })
+  
+  # Helper to return to grid from plot
+  observeEvent(input$back_to_grid, {
+    click("show_grid_view")
+  })
+  
+  output$violin_plot_grid <- renderPlot({
+    req(values$y_protein, values$grid_selected_protein, values$metadata)
+    prot_id <- values$grid_selected_protein
+    exprs_mat <- values$y_protein$E[prot_id, , drop=FALSE]
+    long_df <- as.data.frame(exprs_mat) %>% rownames_to_column("Protein") %>% pivot_longer(-Protein, names_to = "File.Name", values_to = "LogIntensity")
+    long_df <- left_join(long_df, values$metadata, by="File.Name")
+    
+    ggplot(long_df, aes(x = Group, y = LogIntensity, fill = Group)) + 
+      geom_violin(alpha = 0.5, trim = FALSE) + 
+      geom_jitter(width = 0.2, size = 2, alpha = 0.8) + 
+      facet_wrap(~Protein, scales = "free_y") + 
+      theme_bw() + 
+      labs(title = paste("Protein:", prot_id), y = "Log2 Intensity") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
   observeEvent(input$color_de, { values$color_plot_by_de <- TRUE })
   observeEvent(input$reset_color, { values$color_plot_by_de <- FALSE })
   
@@ -617,13 +781,7 @@ server <- function(input, output, session) {
     # 2. Add DE Status (Conditional Data Prep) - FIXED LOGIC
     if (values$color_plot_by_de && !is.null(values$fit) && !is.null(input$contrast_selector) && nchar(input$contrast_selector) > 0) {
       de_data_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
-      
-      # Handle potentially missing Protein.Group column in topTable output
-      if (!"Protein.Group" %in% colnames(de_data_raw)) { 
-        de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group") 
-      } else { 
-        de_data_intermediate <- de_data_raw 
-      }
+      if (!"Protein.Group" %in% colnames(de_data_raw)) { de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group") } else { de_data_intermediate <- de_data_raw }
       
       de_data <- de_data_intermediate %>%
         mutate(DE_Status = case_when(
@@ -635,28 +793,21 @@ server <- function(input, output, session) {
       plot_df <- left_join(plot_df, de_data, by = "Protein.Group")
       plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
     } else {
-      # Ensure column exists to prevent 'object not found' errors in plotting
       plot_df$DE_Status <- "Not Significant"
     }
     
     # 3. Handle Selected Points
-    if (!is.null(values$plot_selected_proteins)) { 
-      plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins 
-    } else { 
-      plot_df$Is_Selected <- FALSE 
-    }
+    if (!is.null(values$plot_selected_proteins)) { plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins } else { plot_df$Is_Selected <- FALSE }
     selected_df <- filter(plot_df, Is_Selected)
     
-    # 4. Generate Plot (With Safe Data)
+    # 4. Generate Plot
     p <- ggplot(plot_df, aes(x = reorder(Protein.Group, -Average_Signal_Log10), y = Average_Signal_Log10))
-    
     if (values$color_plot_by_de && !is.null(values$fit)) {
       p <- p + geom_point(aes(color = DE_Status), size = 1.5) +
         scale_color_manual(name = "DE Status", values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70"))
     } else {
       p <- p + geom_point(color = "cornflowerblue", size = 1.5)
     }
-    
     p + labs(title = "Signal Distribution Across All Protein Groups", x = NULL, y = "Average Signal (Log10 Intensity)") +
       theme_minimal() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
       scale_x_discrete(expand = expansion(add = 1)) +
