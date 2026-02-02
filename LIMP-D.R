@@ -1,6 +1,6 @@
 # ==============================================================================
 #  Limpa Proteomics Analysis App (LIMP-D)
-#  Status: Production Ready (Grid View Links + Interactions)
+#  Status: Production Ready (Final Grid View: Key, Export, Interactions)
 # ==============================================================================
 
 # --- 1. AUTO-INSTALLATION & SETUP ---
@@ -623,12 +623,17 @@ server <- function(input, output, session) {
     # 2. Join
     df_merged <- left_join(df_volc, df_exprs, by="Protein.Group")
     
-    # 3. Sort Columns by Group
+    # 3. Filter if selection exists (Bi-Directional)
+    if (!is.null(values$plot_selected_proteins)) {
+      df_merged <- df_merged %>% filter(Protein.Group %in% values$plot_selected_proteins)
+    }
+    
+    # 4. Sort Columns by Group
     meta_sorted <- values$metadata %>% arrange(Group, File.Name)
     ordered_files <- meta_sorted$File.Name
     valid_cols <- intersect(ordered_files, colnames(df_exprs))
     
-    # 4. Generate Short Column Headers (Run IDs)
+    # 5. Generate Short Column Headers (Run IDs)
     run_ids <- values$metadata$ID[match(valid_cols, values$metadata$File.Name)]
     new_headers <- as.character(run_ids)
     
@@ -644,22 +649,66 @@ server <- function(input, output, session) {
     fixed_cols <- c("Protein.Group", "Gene", "Protein.Name", "Significance", "logFC", "adj.P.Val")
     colnames(df_final) <- c(fixed_cols, new_headers, "Original.ID")
     
+    # Generate Colors here to ensure Legend matches Table Headers
+    unique_groups <- sort(unique(meta_sorted$Group))
+    group_colors <- setNames(rainbow(length(unique_groups), v=0.85, s=0.8), unique_groups)
+    
     list(
       data = df_final, 
       fixed_cols = fixed_cols, 
       expr_cols = new_headers, 
       valid_cols_map = valid_cols, # The real filenames for tooltips
-      meta_sorted = meta_sorted    # Metadata ordered by group
+      meta_sorted = meta_sorted,    # Metadata ordered by group
+      group_colors = group_colors
     )
   })
   
   observeEvent(input$show_grid_view, {
+    gdata <- grid_react_df() # Get data to build legend
+    
+    # Build Legend HTML
+    legend_ui <- tags$div(
+      style = "margin-bottom: 10px;",
+      tags$strong("Condition Legend:"), tags$br(),
+      lapply(names(gdata$group_colors), function(grp) {
+        tags$span(style = paste0("background-color:", gdata$group_colors[[grp]], "; color:white; padding:2px 6px; margin-right:5px; border-radius:3px;"), grp)
+      })
+    )
+    
+    # 2. Build File Key (ID -> Name Map)
+    # Using <details> for a collapsible section to save space
+    file_map_ui <- tags$details(
+      tags$summary(tags$strong("Click to view File ID Mapping (Run # -> Filename)")),
+      tags$div(
+        style = "max-height: 150px; overflow-y: auto; background: #f9f9f9; padding: 10px; border: 1px solid #eee; margin-top: 5px;",
+        lapply(1:nrow(gdata$meta_sorted), function(i) {
+          row <- gdata$meta_sorted[i, ]
+          tags$div(
+            tags$span(style="font-weight:bold; color:#007bff;", paste0("[", row$ID, "] ")),
+            tags$span(row$File.Name),
+            tags$span(style="color:gray; font-size:0.9em;", paste0(" (", row$Group, ")"))
+          )
+        })
+      )
+    )
+    
     showModal(modalDialog(
-      title = "Expression Grid View (Click Row for Plot)", size = "xl",
+      title = "Expression Grid View", size = "xl",
+      legend_ui,
+      file_map_ui, 
+      hr(),
       DTOutput("grid_view_table"),
-      footer = modalButton("Close"),
+      footer = tagList(
+        actionButton("grid_reset_selection", "Show All / Clear Selection", class="btn-warning"),
+        downloadButton("download_grid_data", "Export Full Table (with Filenames)", class="btn-success"),
+        modalButton("Close")
+      ),
       easyClose = TRUE
     ))
+  })
+  
+  observeEvent(input$grid_reset_selection, {
+    values$plot_selected_proteins <- NULL
   })
   
   output$grid_view_table <- renderDT({
@@ -677,10 +726,7 @@ server <- function(input, output, session) {
     expr_cols <- gdata$expr_cols
     valid_cols_map <- gdata$valid_cols_map
     meta_sorted <- gdata$meta_sorted
-    
-    # --- COLOR LOGIC FOR HEADERS (BY CONDITION) ---
-    unique_groups <- unique(meta_sorted$Group)
-    group_colors <- setNames(rainbow(length(unique_groups), v=0.85, s=0.8), unique_groups)
+    group_colors <- gdata$group_colors
     
     header_html <- tags$table(
       class = "display",
@@ -693,7 +739,7 @@ server <- function(input, output, session) {
               original_name <- valid_cols_map[i - length(fixed_cols)]
               grp <- meta_sorted$Group[meta_sorted$File.Name == original_name]
               bg_color <- group_colors[grp]
-              tags$th(title = paste("File:", original_name, "\nGroup:", grp), col_name, style = paste0("background-color: ", bg_color, "; color: white; text-align: center; cursor: help;"))
+              tags$th(title = paste("File:", original_name, "\nGroup:", grp), col_name, style = paste0("background-color: ", bg_color, "; color: white; text-align: center;"))
             } else {
               tags$th(col_name)
             }
@@ -709,12 +755,9 @@ server <- function(input, output, session) {
     
     datatable(df_display, 
               container = header_html, 
-              extensions = 'Buttons',  
               selection = 'single', # Enable row selection
               escape = FALSE,       # Render HTML links
               options = list(
-                dom = 'Bfrtip',        
-                buttons = c('copy', 'csv', 'excel'),
                 pageLength = 15, 
                 scrollX = TRUE,
                 columnDefs = list(list(className = 'dt-center', targets = (length(fixed_cols)):(ncol(df_display)-1)))
@@ -781,7 +824,13 @@ server <- function(input, output, session) {
     # 2. Add DE Status (Conditional Data Prep) - FIXED LOGIC
     if (values$color_plot_by_de && !is.null(values$fit) && !is.null(input$contrast_selector) && nchar(input$contrast_selector) > 0) {
       de_data_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
-      if (!"Protein.Group" %in% colnames(de_data_raw)) { de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group") } else { de_data_intermediate <- de_data_raw }
+      
+      # Handle potentially missing Protein.Group column in topTable output
+      if (!"Protein.Group" %in% colnames(de_data_raw)) { 
+        de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group") 
+      } else { 
+        de_data_intermediate <- de_data_raw 
+      }
       
       de_data <- de_data_intermediate %>%
         mutate(DE_Status = case_when(
@@ -793,21 +842,28 @@ server <- function(input, output, session) {
       plot_df <- left_join(plot_df, de_data, by = "Protein.Group")
       plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
     } else {
+      # Ensure column exists to prevent 'object not found' errors in plotting
       plot_df$DE_Status <- "Not Significant"
     }
     
     # 3. Handle Selected Points
-    if (!is.null(values$plot_selected_proteins)) { plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins } else { plot_df$Is_Selected <- FALSE }
+    if (!is.null(values$plot_selected_proteins)) { 
+      plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins 
+    } else { 
+      plot_df$Is_Selected <- FALSE 
+    }
     selected_df <- filter(plot_df, Is_Selected)
     
-    # 4. Generate Plot
+    # 4. Generate Plot (With Safe Data)
     p <- ggplot(plot_df, aes(x = reorder(Protein.Group, -Average_Signal_Log10), y = Average_Signal_Log10))
+    
     if (values$color_plot_by_de && !is.null(values$fit)) {
       p <- p + geom_point(aes(color = DE_Status), size = 1.5) +
         scale_color_manual(name = "DE Status", values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70"))
     } else {
       p <- p + geom_point(color = "cornflowerblue", size = 1.5)
     }
+    
     p + labs(title = "Signal Distribution Across All Protein Groups", x = NULL, y = "Average Signal (Log10 Intensity)") +
       theme_minimal() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
       scale_x_discrete(expand = expansion(add = 1)) +
