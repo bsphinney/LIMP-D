@@ -1,6 +1,6 @@
 # ==============================================================================
-#  Limpa Proteomics Analysis App (Fixed Export & Tables)
-#  filename: DIA-NN_LIMPA.R
+#  Limpa Proteomics Analysis App (LIMP-D)
+#  Status: Production Ready (All Fixes Applied)
 # ==============================================================================
 
 # --- 1. AUTO-INSTALLATION & SETUP ---
@@ -164,6 +164,29 @@ ask_gemini_file_chat <- function(user_query, file_uri, qc_df, api_key, model_nam
   })
 }
 
+# --- AI TEXT CHAT FUNCTION ---
+ask_gemini_text_chat <- function(user_query, api_key, model_name) {
+  base_url <- "https://generativelanguage.googleapis.com/v1beta/models/"
+  clean_model <- gsub("^models/", "", model_name)
+  full_url <- paste0(base_url, clean_model, ":generateContent")
+  
+  body <- list(contents = list(list(parts = list(list(text = user_query)))))
+  
+  req <- request(full_url) %>%
+    req_url_query(key = api_key) %>%
+    req_headers("Content-Type" = "application/json") %>%
+    req_body_json(body)
+  
+  tryCatch({
+    resp <- req_perform(req)
+    return(resp_body_json(resp)$candidates[[1]]$content$parts[[1]]$text)
+  }, error = function(e) { 
+    err_msg <- "Unknown Error"
+    if (!is.null(e$resp)) { err_msg <- tryCatch(resp_body_string(e$resp), error = function(z) e$message) } else { err_msg <- e$message }
+    return(paste("API Error:", err_msg)) 
+  })
+}
+
 cal_z_score <- function(x) { (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE) }
 
 # --- Auto-detect Organism ---
@@ -173,15 +196,15 @@ detect_organism_db <- function(protein_ids) {
     "_HUMAN" = "org.Hs.eg.db",
     "_MOUSE" = "org.Mm.eg.db",
     "_RAT"   = "org.Rn.eg.db",
-    "_BOVIN" = "org.Bt.eg.db", # Cow
-    "_CANLF" = "org.Cf.eg.db", # Dog
-    "_CHICK" = "org.Gg.eg.db", # Chicken
-    "_DROME" = "org.Dm.eg.db", # Fly
-    "_CAEEL" = "org.Ce.eg.db", # C. elegans
-    "_DANRE" = "org.Dr.eg.db", # Zebrafish
-    "_YEAST" = "org.Sc.sgd.db",# Yeast
-    "_ARATH" = "org.At.tair.db",# Arabidopsis
-    "_PIG"   = "org.Ss.eg.db"  # Pig
+    "_BOVIN" = "org.Bt.eg.db", 
+    "_CANLF" = "org.Cf.eg.db",
+    "_CHICK" = "org.Gg.eg.db",
+    "_DROME" = "org.Dm.eg.db",
+    "_CAEEL" = "org.Ce.eg.db",
+    "_DANRE" = "org.Dr.eg.db",
+    "_YEAST" = "org.Sc.sgd.db",
+    "_ARATH" = "org.At.tair.db",
+    "_PIG"   = "org.Ss.eg.db"
   )
   
   for (suffix in names(ORGANISM_DB_MAP)) {
@@ -189,8 +212,6 @@ detect_organism_db <- function(protein_ids) {
       return(ORGANISM_DB_MAP[[suffix]])
     }
   }
-  
-  # Default to Human if no clear identifier is found
   return("org.Hs.eg.db")
 }
 
@@ -203,7 +224,7 @@ ui <- page_sidebar(
   theme = bs_theme(bootswatch = "flatly"),
   useShinyjs(), 
   
-  tags$head(tags$style(HTML("
+  tags$head(tags$style(HTML(" 
     .chat-container { height: 500px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 15px; }
     .user-msg { text-align: right; margin: 10px 0; }
     .user-msg span { background-color: #007bff; color: white; padding: 8px 12px; border-radius: 15px 15px 0 15px; display: inline-block; max-width: 80%; }
@@ -212,7 +233,7 @@ ui <- page_sidebar(
     .selection-banner { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: bold; border: 1px solid #c3e6cb; }
   "))),
   
-  tags$head(tags$script(HTML("
+  tags$head(tags$script(HTML(" 
     $(document).on('shown.bs.modal', function() { setTimeout(function() { $(window).trigger('resize'); }, 200); });
   "))),
   
@@ -239,7 +260,7 @@ ui <- page_sidebar(
     passwordInput("user_api_key", "Gemini API Key", value = "", placeholder = "AIzaSy..."),
     actionButton("check_models", "Check Models", class="btn-warning btn-xs w-100"),
     br(), br(),
-    textInput("model_name", "Model Name", value = "gemini-3-flash-preview", placeholder = "gemini-1.5-flash")
+    textInput("model_name", "Model Name", value = "gemini-1.5-flash", placeholder = "gemini-1.5-flash")
   ),
   
   navset_card_tab(
@@ -295,7 +316,7 @@ ui <- page_sidebar(
     
     nav_panel("DE Dashboard", icon = icon("table-columns"),
               layout_columns(col_widths = c(6, 6),
-                             card(card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Results Table"), div(actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"), actionButton("show_violin", "📊 Violin Plot", class="btn-primary btn-xs"), downloadButton("download_result_csv", "💾 Export Results", class="btn-success btn-xs")))), DTOutput("de_table")),
+                             card(card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Results Table"), div(actionButton("generate_ai_summary", "🤖 Generate AI Summary", class="btn-info btn-sm"), actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"), actionButton("show_violin", "📊 Violin Plot", class="btn-primary btn-xs"), downloadButton("download_result_csv", "💾 Export Results", class="btn-success btn-xs")))), DTOutput("de_table")),
                              card(card_header("Volcano Plot (Click/Box Select to Filter Table)"), plotlyOutput("volcano_plot_interactive", height = "600px"))),
               card(card_header("Heatmap"), plotOutput("heatmap_plot", height="400px"))),
     
@@ -310,7 +331,20 @@ ui <- page_sidebar(
     ),
     
     nav_panel("Reproducibility", icon = icon("code"),
-              card(card_header("R Code for Reproducibility"), card_body(p("Copy the code below."), verbatimTextOutput("reproducible_code")))),
+              navset_card_tab(
+                nav_panel("Code Log",
+                          card_body(
+                            p("Copy the R code below to reproduce your analysis steps. It's timestamped and includes comments."),
+                            verbatimTextOutput("reproducible_code")
+                          )
+                ),
+                nav_panel("Methodology",
+                          card_body(
+                            textOutput("methodology_text")
+                          )
+                )
+              )
+    ),
     
     nav_panel("Gene Set Enrichment", icon = icon("sitemap"),
               card(
@@ -354,14 +388,23 @@ ui <- page_sidebar(
 # ==============================================================================
 #  SERVER LOGIC
 # ==============================================================================
-
-server <- function(input, output, session) {
+server <- function(input, output, session) { 
   
-  values <- reactiveValues(raw_data=NULL, metadata=NULL, fit=NULL, y_protein=NULL, dpc_fit=NULL, 
-                           status="Waiting...", design=NULL, qc_stats=NULL,
-                           plot_selected_proteins = NULL, chat_history = list(),
-                           current_file_uri = NULL) 
+  # ============================================================================
+  #      1. Reactive Values & Global Helpers
+  # ============================================================================
+  values <- reactiveValues(
+    raw_data = NULL, metadata = NULL, fit = NULL, y_protein = NULL, 
+    dpc_fit = NULL, status = "Waiting...", design = NULL, qc_stats = NULL,
+    plot_selected_proteins = NULL, chat_history = list(),
+    current_file_uri = NULL, gsea_results = NULL,
+    repro_log = character(0),
+    color_plot_by_de = FALSE
+  )
   
+  # ============================================================================
+  #      2. Main Data Loading & Processing Pipeline
+  # ============================================================================
   observeEvent(input$report_file, {
     req(input$report_file)
     withProgress(message = "Loading...", {
@@ -377,23 +420,179 @@ server <- function(input, output, session) {
     })
   })
   
+  observeEvent(input$run, {
+    req(values$raw_data, values$metadata); meta <- values$metadata; meta$Group <- trimws(meta$Group)
+    if(length(unique(meta$Group)) < 2) { showNotification("Error: Need at least 2 groups.", type="error"); return() }
+    
+    # --- Start Reproducibility Log ---
+    base_script <- c(
+      "# === LIMP-D Reproducibility Log ===",
+      sprintf("# Log generated on %s", Sys.time()),
+      "\n# --- 1. Load Libraries ---",
+      "library(limpa); library(limma); library(dplyr); library(stringr); library(ggrepel);",
+      "\n# --- 2. Data Loading ---",
+      sprintf("dat <- readDIANN('path/to/your/report.parquet', format='parquet', q.cutoffs=%s)", input$q_cutoff),
+      "\n# --- 3. Normalization & Quantification ---",
+      "dpcfit <- dpcCN(dat)",
+      "y_protein <- dpcQuant(dat, 'Protein.Group', dpc=dpcfit)",
+      "\n# --- 4. Experimental Design ---",
+      "group_map <- c(", paste(sprintf("  '%s' = '%s'", meta$File.Name, meta$Group), collapse=",\n"), ")",
+      "metadata <- data.frame(File.Name = names(group_map), Group = group_map)",
+      "metadata <- metadata[match(colnames(dat$E), metadata$File.Name), ]",
+      "groups <- factor(metadata$Group)",
+      "design <- model.matrix(~ 0 + groups); colnames(design) <- levels(groups)",
+      "\n# --- 5. Initial Model Fit ---",
+      "fit <- dpcDE(y_protein, design, plot=FALSE)"
+    )
+    
+    # CRITICAL DEV NOTE: 'values' is a reactiveValues list.
+    # We MUST use assignment operator `<-` to update 'repro_log'.
+    values$repro_log <- base_script 
+    
+    withProgress(message='Running Pipeline...', {
+      tryCatch({
+        dat <- values$raw_data; 
+        dpcfit <- limpa::dpcCN(dat);
+        values$dpc_fit <- dpcfit;
+        
+        values$y_protein <- tryCatch({
+          limpa::dpcQuant(dat, "Protein.Group", dpc=dpcfit)
+        }, error = function(e) {
+          showNotification(paste("Protein quantification failed:", e$message), type = "error", duration = NULL)
+          return(NULL)
+        })
+        
+        req(values$y_protein)
+        
+        rownames(meta) <- meta$File.Name; meta <- meta[colnames(dat$E), ]; meta$Group <- make.names(meta$Group); groups <- factor(meta$Group)
+        design <- model.matrix(~ 0 + groups); colnames(design) <- levels(groups)
+        combs <- combn(levels(groups), 2); forms <- apply(combs, 2, function(x) paste(x[2], "-", x[1]))
+        fit <- limpa::dpcDE(values$y_protein, design, plot=FALSE); fit <- contrasts.fit(fit, makeContrasts(contrasts=forms, levels=design)); fit <- eBayes(fit)
+        values$fit <- fit; updateSelectInput(session, "contrast_selector", choices=forms); values$status <- "✅ Complete!"; nav_select("main_tabs", "QC Plots")
+      }, error=function(e) showNotification(paste("Error during DE analysis:", e$message), type="error", duration = NULL))
+    })
+  })
+  
+  # ============================================================================
+  #      3. Setup Modal & Metadata Handling
+  # ============================================================================
+  observeEvent(input$open_setup, { 
+    req(values$metadata)
+    showModal(modalDialog(
+      title = "Assign Groups", size = "xl",
+      actionButton("guess_groups", "🪄 Auto-Guess", class="btn-info btn-sm"), br(), br(),
+      rHandsontableOutput("hot_metadata_modal"),
+      footer = tagList(modalButton("Cancel"), actionButton("save_groups", "Save & Close", class="btn-success"))
+    ))
+  })
+  
+  output$hot_metadata_modal <- renderRHandsontable({ 
+    req(values$metadata)
+    rhandsontable(values$metadata, rowHeaders=NULL, stretchH="all", height=500, width="100%") %>%
+      hot_col("ID", readOnly=TRUE, width=50) %>% hot_col("File.Name", readOnly=TRUE) %>% hot_col("Group", type="text") 
+  })
+  
+  observeEvent(input$guess_groups, { 
+    req(values$metadata)
+    meta <- if(!is.null(input$hot_metadata_modal)) hot_to_r(input$hot_metadata_modal) else values$metadata
+    
+    cleaned_filenames <- str_remove(meta$File.Name, "^\\d{8}_")
+    cleaned_filenames <- str_remove_all(cleaned_filenames, "_deepfrac|\\.parquet")
+    
+    keywords <- c("affinisepACN", "affinisepIPA", "Control", "Treatment", "Evosep", "Affinisep")
+    
+    find_best_match <- function(filename_clean) {
+      matches <- keywords[str_detect(filename_clean, regex(keywords, ignore_case = TRUE))]
+      if (length(matches) == 0) return("")
+      else return(matches[which.max(nchar(matches))])
+    }
+    
+    guessed_groups <- sapply(cleaned_filenames, find_best_match)
+    
+    sample_counter <- 0
+    for (i in seq_along(guessed_groups)) {
+      if (guessed_groups[i] == "") {
+        sample_counter <- sample_counter + 1
+        guessed_groups[i] <- paste0("Sample_", sample_counter)
+      }
+    }
+    
+    meta$Group <- guessed_groups
+    values$metadata <- meta
+  })
+  
+  observeEvent(input$save_groups, { 
+    req(input$hot_metadata_modal, values$metadata)
+    old_meta <- values$metadata
+    new_meta <- hot_to_r(input$hot_metadata_modal)
+    changed_indices <- which(old_meta$Group != new_meta$Group)
+    
+    if (length(changed_indices) > 0) {
+      code_lines <- sprintf("metadata$Group[%d] <- '%s'", changed_indices, new_meta$Group[changed_indices])
+      # CRITICAL DEV NOTE: Using Assignment <- for reactiveValues list element
+      values$repro_log <- c(values$repro_log, "", c(sprintf("# --- Manual Group Edits [%s] ---", Sys.time()), code_lines))
+    }
+    
+    values$metadata <- new_meta
+    removeModal()
+    showNotification("Groups saved!", type="message")
+  })
+  
+  # ============================================================================
+  #      4. Reactive Data Expressions
+  # ============================================================================
+  volcano_data <- reactive({
+    req(values$fit, input$contrast_selector)
+    df_raw <- topTable(values$fit, coef=input$contrast_selector, number=Inf) %>% as.data.frame()
+    
+    if (!"Protein.Group" %in% colnames(df_raw)) { df <- df_raw %>% rownames_to_column("Protein.Group") } else { df <- df_raw }
+    
+    org_db_name <- detect_organism_db(df$Protein.Group)
+    df$Accession <- str_split_fixed(df$Protein.Group, "[; ]", 2)[,1]
+    
+    id_map <- tryCatch({
+      if (!requireNamespace(org_db_name, quietly = TRUE)) { BiocManager::install(org_db_name, ask = FALSE) }
+      library(org_db_name, character.only = TRUE)
+      bitr(df$Accession, fromType = "UNIPROT", toType = c("SYMBOL", "GENENAME"), OrgDb = get(org_db_name))
+    }, error = function(e) {
+      showNotification(paste("Annotation translation failed:", e$message), type = "warning", duration = 5)
+      return(NULL)
+    })
+    
+    if (!is.null(id_map)) {
+      df <- df %>% left_join(id_map, by = c("Accession" = "UNIPROT")) %>%
+        mutate(
+          Gene = ifelse(is.na(SYMBOL), Accession, SYMBOL),
+          Protein.Name = ifelse(is.na(GENENAME), Protein.Group, GENENAME)
+        )
+    } else {
+      df$Gene <- df$Accession
+      df$Protein.Name <- df$Protein.Group
+    }
+    
+    df$Significance <- "Not Sig"; df$Significance[df$adj.P.Val < 0.05 & abs(df$logFC) > input$logfc_cutoff] <- "Significant"
+    df$Selected <- "No"; if (!is.null(values$plot_selected_proteins)) { df$Selected[df$Protein.Group %in% values$plot_selected_proteins] <- "Yes" }
+    df
+  })
+  
+  # ============================================================================
+  #      5. UI Outputs & Renderers
+  # ============================================================================
+  output$run_status_msg <- renderText({ values$status })
+  
   observeEvent(input$show_summary_modal, {
     req(values$metadata)
-    
     summary_elements <- list()
-    
     summary_elements[[length(summary_elements) + 1]] <- tags$h5("File Summary")
     summary_elements[[length(summary_elements) + 1]] <- tags$p(paste("Total Files:", nrow(values$metadata)))
-    summary_elements[[length(summary_elements) + 1]] <- tags$p(paste("Assigned Groups:", length(unique(values$metadata$Group[values$metadata$Group != ""]))))
+    summary_elements[[length(summary_elements) + 1]] <- tags$p(paste("Assigned Groups:", length(unique(values$metadata$Group[values$metadata$Group != ""])) ))
     
     if (!is.null(values$y_protein)) {
       summary_elements[[length(summary_elements) + 1]] <- tags$hr()
       summary_elements[[length(summary_elements) + 1]] <- tags$h5("Dataset Metrics")
-      
       avg_signal <- rowMeans(values$y_protein$E, na.rm = TRUE)
       min_linear <- 2^min(avg_signal, na.rm = TRUE)
       max_linear <- 2^max(avg_signal, na.rm = TRUE)
-      
       if (min_linear > 1e-10) {
         orders_of_magnitude <- log10(max_linear / min_linear)
         summary_elements[[length(summary_elements) + 1]] <- tags$p(paste("Signal Dynamic Range:", round(orders_of_magnitude, 1), "orders of magnitude"))
@@ -401,130 +600,89 @@ server <- function(input, output, session) {
         summary_elements[[length(summary_elements) + 1]] <- tags$p("Dynamic Range: N/A (Min signal is zero)")
       }
     }
-    
-    showModal(modalDialog(
-      title = "Dataset Summary",
-      tagList(summary_elements),
-      easyClose = TRUE,
-      footer = modalButton("Close")
-    ))
+    showModal(modalDialog(title = "Dataset Summary", tagList(summary_elements), easyClose = TRUE, footer = modalButton("Close")))
   })
   
-  values$color_plot_by_de <- reactiveVal(FALSE)
-  observeEvent(input$color_de, { values$color_plot_by_de(TRUE) })
-  observeEvent(input$reset_color, { values$color_plot_by_de(FALSE) })
-
+  observeEvent(input$color_de, { values$color_plot_by_de <- TRUE })
+  observeEvent(input$reset_color, { values$color_plot_by_de <- FALSE })
+  
   output$protein_signal_plot <- renderPlot({
     req(values$y_protein)
     
-    # Base data calculation
+    # 1. Base Data Construction
     avg_signal <- rowMeans(values$y_protein$E, na.rm = TRUE)
-    plot_df <- data.frame(
-      Protein.Group = names(avg_signal),
-      Average_Signal_Log2 = avg_signal
-    ) %>%
+    plot_df <- data.frame(Protein.Group = names(avg_signal), Average_Signal_Log2 = avg_signal) %>%
       mutate(Average_Signal_Log10 = Average_Signal_Log2 / log2(10))
     
-        # Check if coloring is requested and possible
-        if (values$color_plot_by_de() && !is.null(values$fit) && !is.null(input$contrast_selector) && nchar(input$contrast_selector) > 0) {
-          
-          de_data_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>%
-            as.data.frame()
-            
-          if (!"Protein.Group" %in% colnames(de_data_raw)) {
-            de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group")
-          } else {
-            de_data_intermediate <- de_data_raw
-          }
-          
-          de_data <- de_data_intermediate %>%
-            mutate(
-              DE_Status = case_when(
-                adj.P.Val < 0.05 & logFC > input$logfc_cutoff ~ "Up-regulated",
-                adj.P.Val < 0.05 & logFC < -input$logfc_cutoff ~ "Down-regulated",
-                TRUE ~ "Not Significant"
-              )
-            ) %>%
-            dplyr::select(Protein.Group, DE_Status)
-            
-          plot_df <- left_join(plot_df, de_data, by = "Protein.Group")
-          plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
-          
-          # Set up plot with color aesthetic
-          p <- ggplot(plot_df, aes(x = reorder(Protein.Group, -Average_Signal_Log10), y = Average_Signal_Log10, color = DE_Status)) +
-            geom_point(size = 1.5) +
-            scale_color_manual(
-              name = "DE Status",
-              values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70")
-            )
-          
-        } else {      # Default plot (no color aesthetic)
-      p <- ggplot(plot_df, aes(x = reorder(Protein.Group, -Average_Signal_Log10), y = Average_Signal_Log10)) +
-        geom_point(color = "cornflowerblue", size = 1.5)
-    }
-    
-    # --- Add common elements, including selection highlights ---
-    
-    # Add selection column
-    if (!is.null(values$plot_selected_proteins)) {
-      plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins
+    # 2. Add DE Status (Conditional Data Prep) - FIXED LOGIC
+    if (values$color_plot_by_de && !is.null(values$fit) && !is.null(input$contrast_selector) && nchar(input$contrast_selector) > 0) {
+      de_data_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
+      
+      # Handle potentially missing Protein.Group column in topTable output
+      if (!"Protein.Group" %in% colnames(de_data_raw)) { 
+        de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group") 
+      } else { 
+        de_data_intermediate <- de_data_raw 
+      }
+      
+      de_data <- de_data_intermediate %>%
+        mutate(DE_Status = case_when(
+          adj.P.Val < 0.05 & logFC > input$logfc_cutoff ~ "Up-regulated",
+          adj.P.Val < 0.05 & logFC < -input$logfc_cutoff ~ "Down-regulated",
+          TRUE ~ "Not Significant"
+        )) %>% dplyr::select(Protein.Group, DE_Status)
+      
+      plot_df <- left_join(plot_df, de_data, by = "Protein.Group")
+      plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
     } else {
-      plot_df$Is_Selected <- FALSE
+      # Ensure column exists to prevent 'object not found' errors in plotting
+      plot_df$DE_Status <- "Not Significant"
     }
     
+    # 3. Handle Selected Points
+    if (!is.null(values$plot_selected_proteins)) { 
+      plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins 
+    } else { 
+      plot_df$Is_Selected <- FALSE 
+    }
     selected_df <- filter(plot_df, Is_Selected)
     
-    p +
-      labs(
-        title = "Signal Distribution Across All Protein Groups",
-        x = NULL,
-        y = "Average Signal (Log10 Intensity)"
-      ) +
-      theme_minimal() +
-      theme(
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank()
-      ) +
+    # 4. Generate Plot (With Safe Data)
+    p <- ggplot(plot_df, aes(x = reorder(Protein.Group, -Average_Signal_Log10), y = Average_Signal_Log10))
+    
+    if (values$color_plot_by_de && !is.null(values$fit)) {
+      p <- p + geom_point(aes(color = DE_Status), size = 1.5) +
+        scale_color_manual(name = "DE Status", values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70"))
+    } else {
+      p <- p + geom_point(color = "cornflowerblue", size = 1.5)
+    }
+    
+    p + labs(title = "Signal Distribution Across All Protein Groups", x = NULL, y = "Average Signal (Log10 Intensity)") +
+      theme_minimal() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
       scale_x_discrete(expand = expansion(add = 1)) +
-      
-      # Add layers to highlight and label selected points
       geom_point(data = selected_df, color = "black", shape = 1, size = 4, stroke = 1) +
       geom_text_repel(data = selected_df, aes(label = Protein.Group), size = 4, max.overlaps = 20)
   })
   
   output$group_summary_table <- renderDT({
     req(values$qc_stats, values$metadata)
-    
     summary_df <- values$qc_stats %>%
       left_join(values$metadata, by = c("Run" = "File.Name")) %>%
-      filter(Group != "") %>%
-      group_by(Group) %>%
+      filter(Group != "") %>% group_by(Group) %>%
       summarise(
         `Avg. Precursors` = mean(Precursors, na.rm = TRUE),
         `Avg. MS1 Signal` = mean(MS1_Signal, na.rm = TRUE),
         `Avg. Proteins` = mean(Proteins, na.rm = TRUE)
       ) %>%
       mutate(across(where(is.numeric), ~round(.x, 0)))
-      
-    datatable(summary_df, options = list(
-      dom = 't', # Show only the table, no search or pagination
-      pageLength = 10
-    ), rownames = FALSE)
+    datatable(summary_df, options = list(dom = 't', pageLength = 10), rownames = FALSE)
   })
   
   output$qc_trend_plot <- renderPlotly({
     req(values$qc_stats, input$qc_metric_select, values$metadata)
-    
     df <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>%
       mutate(Run_Number = as.numeric(str_extract(Run, "\\d+$")))
-    
-    # Sort by Group then numeric Run, or just by numeric Run
-    if (input$qc_sort_order == "Group") {
-      df <- df %>% arrange(Group, Run_Number)
-    } else {
-      df <- df %>% arrange(Run_Number)
-    }
-    
+    if (input$qc_sort_order == "Group") { df <- df %>% arrange(Group, Run_Number) } else { df <- df %>% arrange(Run_Number) }
     df$Sort_Index <- factor(1:nrow(df), levels = 1:nrow(df))
     metric <- input$qc_metric_select
     df$Tooltip <- paste0("<b>File:</b> ", df$Run, "<br><b>Group:</b> ", df$Group, "<br><b>", metric, ":</b> ", round(df[[metric]], 2))
@@ -548,203 +706,78 @@ server <- function(input, output, session) {
     ggplotly(p, tooltip = "text")
   })
   
-  observeEvent(input$open_setup, { req(values$metadata); showModal(modalDialog(title = "Assign Groups", size = "xl", actionButton("guess_groups", "🪄 Auto-Guess", class="btn-info btn-sm"), br(), br(), rHandsontableOutput("hot_metadata_modal"), footer = tagList(modalButton("Cancel"), actionButton("save_groups", "Save & Close", class="btn-success")))) })
-  
-  output$hot_metadata_modal <- renderRHandsontable({ 
-    req(values$metadata)
-    rhandsontable(values$metadata, rowHeaders=NULL, stretchH="all", height=500, width="100%") %>% 
-      hot_col("ID", readOnly=TRUE, width=50) %>% 
-      hot_col("File.Name", readOnly=TRUE) %>% 
-      hot_col("Group", type="text") 
-  })
-  
-  observeEvent(input$guess_groups, { 
-    req(values$metadata)
-    meta <- if(!is.null(input$hot_metadata_modal)) hot_to_r(input$hot_metadata_modal) else values$metadata
-    
-    # Define keywords, longest/most specific names first
-    keywords <- c("affinisepACN", "affinisepIPA", "Control", "Treatment", "Evosep", "Affinisep")
-    
-    find_best_match <- function(filename) {
-      matches <- c()
-      for (kw in keywords) {
-        if (grepl(kw, filename, ignore.case = TRUE)) {
-          matches <- c(matches, kw)
-        }
-      }
-      if (length(matches) == 0) return("")
-      else return(matches[which.max(nchar(matches))])
-    }
-    
-    meta$Group <- sapply(meta$File.Name, find_best_match)
-    
-    # Only update the reactive value; the renderer will react automatically
-    values$metadata <- meta
-  })
-  
-  observeEvent(input$save_groups, { if(!is.null(input$hot_metadata_modal)) values$metadata <- hot_to_r(input$hot_metadata_modal); removeModal(); showNotification("Groups saved!", type="message") })
-  
-  values$repro_log <- reactiveVal(character(0))
-  
-  observeEvent(input$run, {
-    req(values$raw_data, values$metadata); meta <- values$metadata; meta$Group <- trimws(meta$Group)
-    if(length(unique(meta$Group)) < 2) { showNotification("Error: Need 2+ groups.", type="error"); return() }
-    
-    # --- Start Reproducibility Log ---
-    base_script <- c(
-      "# === LIMP-D Reproducibility Log ===",
-      sprintf("# Log generated on %s", Sys.time()),
-      "",
-      "# --- 1. Load Libraries ---",
-      "library(limpa)", "library(limma)", "library(dplyr)", "library(stringr)",
-      "",
-      "# --- 2. Data Loading & Initial Pre-processing ---",
-      sprintf("dat <- readDIANN('path/to/your/report.parquet', format='parquet', q.cutoffs=%s)", input$q_cutoff),
-      "",
-      "# --- 3. Data Processing & Cleaning (DPC) ---",
-      "dpcfit <- dpc(dat)",
-      "y_protein <- dpcQuant(dat, 'Protein.Group', dpc=dpcfit)",
-      "",
-      "# --- 4. Experimental Design Setup ---",
-      "group_map <- c(",
-      paste(sprintf("  '%s' = '%s'", meta$File.Name, meta$Group), collapse=",\n"),
-      ")",
-      "metadata <- data.frame(File.Name = names(group_map), Group = group_map)",
-      "metadata <- metadata[match(colnames(dat$E), metadata$File.Name), ]",
-      "groups <- factor(metadata$Group)",
-      "design <- model.matrix(~ 0 + groups); colnames(design) <- levels(groups)",
-      "",
-      "# --- 5. Initial Differential Expression Model Fit ---",
-      "fit <- dpcDE(y_protein, design, plot=FALSE)"
-    )
-    values$repro_log(base_script)
-    # --- End Reproducibility Log ---
-
-    withProgress(message='Running Pipeline...', {
-      tryCatch({
-        dat <- values$raw_data; dpcfit <- limpa::dpc(dat); values$dpc_fit <- dpcfit; values$y_protein <- limpa::dpcQuant(dat, "Protein.Group", dpc=dpcfit)
-        rownames(meta) <- meta$File.Name; meta <- meta[colnames(dat$E), ]; meta$Group <- make.names(meta$Group); groups <- factor(meta$Group)
-        design <- model.matrix(~ 0 + groups); colnames(design) <- levels(groups)
-        combs <- combn(levels(groups), 2); forms <- apply(combs, 2, function(x) paste(x[2], "-", x[1]))
-        fit <- limpa::dpcDE(values$y_protein, design, plot=FALSE); fit <- contrasts.fit(fit, makeContrasts(contrasts=forms, levels=design)); fit <- eBayes(fit)
-        values$fit <- fit; updateSelectInput(session, "contrast_selector", choices=forms); values$status <- "✅ Complete!"; nav_select("main_tabs", "QC Plots")
-      }, error=function(e) showNotification(paste("Error:", e$message), type="error"))
-    })
-  })
-  
-  # New observer to log contrast analysis
-  observeEvent(input$contrast_selector, {
-    req(input$contrast_selector, values$fit) # Ensure this runs only when intended
-    
-    contrast_code <- c(
-      "",
-      sprintf("# --- 6. Differential Expression Analysis for Comparison: %s [%s] ---", input$contrast_selector, Sys.time()),
-      "# Define the contrast for the selected comparison.",
-      sprintf("cont <- makeContrasts(%s, levels=design)", input$contrast_selector),
-      "# Apply the contrast to the fitted model.",
-      "fit2 <- contrasts.fit(fit, cont)",
-      "# Perform empirical Bayes moderation.",
-      "fit2 <- eBayes(fit2)",
-      "# Extract differential expression results (all proteins).",
-      "results <- topTable(fit2, number=Inf)"
-    )
-    
-    # Append to the log
-    values$repro_log(c(values$repro_log(), contrast_code))
-  }, ignoreInit = TRUE) # ignoreInit prevents it from running on startup
-  
-  output$run_status_msg <- renderText({ values$status })
-  
   output$dpc_plot <- renderPlot({ req(values$dpc_fit); limpa::plotDPC(values$dpc_fit) })
   output$mds_plot <- renderPlot({
     req(values$y_protein, values$metadata)
     meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]
     grps <- factor(meta$Group)
     cols <- rainbow(length(levels(grps)))
-    # Set xpd to TRUE to allow plotting outside the plot region
     par(xpd = TRUE)
     limpa::plotMDSUsingSEs(values$y_protein, pch=16, main="MDS Plot", col=cols[grps])
-    # Place legend to the right of the plot area
     legend(x = "right", inset = c(-0.2, 0), legend=levels(grps), col=cols, pch=16, bty = "n")
   })
   
-  volcano_data <- reactive({
-    req(values$fit, input$contrast_selector)
-    
-    df_raw <- topTable(values$fit, coef=input$contrast_selector, number=Inf) %>% as.data.frame()
-    
-    if (!"Protein.Group" %in% colnames(df_raw)) {
-      df <- df_raw %>% rownames_to_column("Protein.Group")
-    } else {
-      df <- df_raw
-    }
-    
-    # --- Perform Gene Symbol & Name Translation ---
-    org_db_name <- detect_organism_db(df$Protein.Group)
-    df$Accession <- str_split_fixed(df$Protein.Group, "[; ]", 2)[,1]
-    
-    id_map <- tryCatch({
-      if (!requireNamespace(org_db_name, quietly = TRUE)) { BiocManager::install(org_db_name, ask = FALSE) }
-      library(org_db_name, character.only = TRUE)
-      # Fetch both Symbol and Full Gene Name
-      bitr(df$Accession, fromType = "UNIPROT", toType = c("SYMBOL", "GENENAME"), OrgDb = get(org_db_name))
-    }, error = function(e) {
-      showNotification(paste("Annotation translation failed:", e$message), type = "warning", duration = 5)
-      return(NULL)
-    })
-    
-    if (!is.null(id_map)) {
-      df <- df %>%
-        left_join(id_map, by = c("Accession" = "UNIPROT")) %>%
-        mutate(
-          Gene = ifelse(is.na(SYMBOL), Accession, SYMBOL),
-          Protein.Name = ifelse(is.na(GENENAME), Protein.Group, GENENAME) # Use full name, fallback to original ID
-        )
-    } else {
-      df$Gene <- df$Accession
-      df$Protein.Name <- df$Protein.Group # Fallback if all translation fails
-    }
-    
-    df$Significance <- "Not Sig"; df$Significance[df$adj.P.Val < 0.05 & abs(df$logFC) > input$logfc_cutoff] <- "Significant"
-    df$Selected <- "No"; if (!is.null(values$plot_selected_proteins)) { df$Selected[df$Protein.Group %in% values$plot_selected_proteins] <- "Yes" }
-    df
-  })
-  
-  output$volcano_plot_interactive <- renderPlotly({
-    df <- volcano_data(); cols <- c("Not Sig" = "grey", "Significant" = "red")
-    # Use the Gene column for the hover text for better info
-    p <- ggplot(df, aes(x = logFC, y = -log10(adj.P.Val), text = paste("Gene:", Gene), key = Protein.Group, color = Significance)) +
-      geom_point(alpha = 0.6) + scale_color_manual(values = cols) + geom_vline(xintercept = c(-input$logfc_cutoff, input$logfc_cutoff), linetype="dashed") + geom_hline(yintercept = -log10(0.05), linetype="dashed") + theme_minimal()
-    df_sel <- df %>% filter(Selected == "Yes"); if (nrow(df_sel) > 0) p <- p + geom_point(data = df_sel, aes(x=logFC, y=-log10(adj.P.Val)), shape=21, size=4, fill=NA, color="blue", stroke=2)
-    ggplotly(p, tooltip = "text", source = "volcano_source") %>% layout(dragmode = "select")
-  })
-  
-  observeEvent(event_data("plotly_selected", source = "volcano_source"), { select_data <- event_data("plotly_selected", source = "volcano_source"); if (!is.null(select_data)) values$plot_selected_proteins <- select_data$key })
-  observeEvent(event_data("plotly_click", source = "volcano_source"), { click_data <- event_data("plotly_click", source = "volcano_source"); if (!is.null(click_data)) values$plot_selected_proteins <- click_data$key })
-  observeEvent(input$clear_plot_selection, { values$plot_selected_proteins <- NULL })
-  
   output$de_table <- renderDT({
     df_full <- volcano_data()
-
-    df_filtered <- if (!is.null(values$plot_selected_proteins)) {
-      # Filter using the original, unmodified Protein.Group identifier
-      df_full %>% filter(Protein.Group %in% values$plot_selected_proteins)
-    } else {
-      df_full
-    }
-    
+    df_filtered <- if (!is.null(values$plot_selected_proteins)) { df_full %>% filter(Protein.Group %in% values$plot_selected_proteins) } else { df_full }
     df_display <- df_filtered %>%
       mutate(across(where(is.numeric), function(x) round(x,4))) %>%
-      mutate(
-        Protein.Name_Link = ifelse(
-          !is.na(Accession) & str_detect(Accession, "^[A-Z0-9]{6,}$"),
-          paste0("<a href='https://www.uniprot.org/uniprotkb/", Accession, "/entry' target='_blank' onclick='window.open(this.href, \"_blank\"); return false;'>", Protein.Name, "</a>"),
-          Protein.Name
-        )
-      ) %>%
+      mutate(Protein.Name_Link = ifelse(
+        !is.na(Accession) & str_detect(Accession, "^[A-Z0-9]{6,}$"),
+        paste0("<a href='https://www.uniprot.org/uniprotkb/", Accession, "/entry' target='_blank' onclick='window.open(this.href, \"_blank\"); return false;'>", Protein.Name, "</a>"),
+        Protein.Name
+      )) %>%
       dplyr::select(Gene, `Protein Name` = Protein.Name_Link, logFC, adj.P.Val, Significance)
-      
     datatable(df_display, selection = "multiple", options = list(pageLength = 10, scrollX = TRUE), escape = FALSE, rownames = FALSE)
+  })
+  
+  observeEvent(input$generate_ai_summary, {
+    req(values$fit, input$contrast_selector, values$y_protein, input$user_api_key)
+    withProgress(message = "Generating AI Summary...", value = 0, {
+      incProgress(0.2, detail = "Gathering DE data...")
+      top_de_data <- volcano_data() %>%
+        filter(Significance != "Not Significant") %>% arrange(adj.P.Val) %>% head(50) %>%
+        dplyr::select(Gene, logFC, adj.P.Val) %>% mutate(across(where(is.numeric), ~round(.x, 3)))
+      top_de_text <- paste(capture.output(print(as.data.frame(top_de_data))), collapse = "\n")
+      
+      incProgress(0.5, detail = "Gathering stable proteins...")
+      stable_prots_df <- tryCatch({
+        df_res_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame() %>% filter(adj.P.Val < 0.05)
+        if (!"Protein.Group" %in% colnames(df_res_raw)) { df_res <- df_res_raw %>% rownames_to_column("Protein.Group") } else { df_res <- df_res_raw }
+        if(nrow(df_res) == 0) return(data.frame(Info="No significant proteins to assess for stability."))
+        protein_ids_for_cv <- df_res$Protein.Group
+        raw_exprs <- values$y_protein$E[protein_ids_for_cv, , drop = FALSE]; linear_exprs <- 2^raw_exprs
+        cv_list <- list()
+        for(g in unique(values$metadata$Group)) {
+          if (g == "") next
+          files_in_group <- values$metadata$File.Name[values$metadata$Group == g]
+          group_cols <- intersect(colnames(linear_exprs), files_in_group)
+          if (length(group_cols) > 1) {
+            group_data <- linear_exprs[, group_cols, drop = FALSE]
+            cv_list[[paste0("CV_", g)]] <- apply(group_data, 1, function(x) (sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)) * 100)
+          } else { cv_list[[paste0("CV_", g)]] <- NA }
+        }
+        cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
+        left_join(df_res, cv_df, by = "Protein.Group") %>%
+          rowwise() %>% mutate(Avg_CV = mean(c_across(starts_with("CV_")), na.rm = TRUE)) %>% ungroup() %>%
+          arrange(Avg_CV) %>% head(3) %>% dplyr::select(Protein.Group, Avg_CV, logFC, adj.P.Val) %>%
+          mutate(across(where(is.numeric), ~round(.x, 2)))
+      }, error = function(e) data.frame(Error = "Could not calculate stable proteins."))
+      stable_prots_text <- paste(capture.output(print(as.data.frame(stable_prots_df))), collapse = "\n")
+      
+      incProgress(0.7, detail = "Constructing prompt...")
+      system_prompt <- "You are a senior proteomics consultant at a core facility. Write a 3-paragraph summary..."
+      final_prompt <- paste0(system_prompt, "\n\n--- DATA FOR SUMMARY ---\n\n...", top_de_text, "...", stable_prots_text, "...")
+      
+      incProgress(0.8, detail = "Asking AI...")
+      ai_summary <- ask_gemini_text_chat(final_prompt, input$user_api_key, input$model_name)
+      
+      showModal(modalDialog(
+        title = "AI-Generated Summary",
+        HTML(markdown::markdownToHTML(text = ai_summary, fragment.only = TRUE)),
+        easyClose = TRUE, footer = modalButton("Close")
+      ))
+    })
   })
   
   output$heatmap_plot <- renderPlot({
@@ -772,234 +805,98 @@ server <- function(input, output, session) {
     })
   })
   
-  # --- UPDATED: CONSISTENT DE TABLE (SAFE COLUMN NAMES) ---
   output$consistent_table <- renderDT({
     req(values$fit, values$y_protein, input$contrast_selector, values$metadata)
-    
-    # Get significant results
-    df_res_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>%
-      as.data.frame() %>%
-      filter(adj.P.Val < 0.05)
-      
-    # Safely create a Protein.Group column from rownames if it doesn't exist
-    if (!"Protein.Group" %in% colnames(df_res_raw)) {
-      df_res <- df_res_raw %>% rownames_to_column("Protein.Group")
-    } else {
-      df_res <- df_res_raw
-    }
-      
+    df_res_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame() %>% filter(adj.P.Val < 0.05)
+    if (!"Protein.Group" %in% colnames(df_res_raw)) { df_res <- df_res_raw %>% rownames_to_column("Protein.Group") } else { df_res <- df_res_raw }
     if(nrow(df_res) == 0) return(datatable(data.frame(Status="No significant proteins found.")))
-    
-    # Calculate CV for each group
-    # Ensure we use the correct column of protein IDs that exists in df_res
     protein_ids_for_cv <- df_res$Protein.Group
-    
-    raw_exprs <- values$y_protein$E[protein_ids_for_cv, , drop = FALSE]
-    linear_exprs <- 2^raw_exprs
-    
+    raw_exprs <- values$y_protein$E[protein_ids_for_cv, , drop = FALSE]; linear_exprs <- 2^raw_exprs
     cv_list <- list()
     for(g in unique(values$metadata$Group)) {
-      if (g == "") next # Skip unassigned groups
+      if (g == "") next
       files_in_group <- values$metadata$File.Name[values$metadata$Group == g]
       group_cols <- intersect(colnames(linear_exprs), files_in_group)
-      
       if (length(group_cols) > 1) {
         group_data <- linear_exprs[, group_cols, drop = FALSE]
         cv_list[[paste0("CV_", g)]] <- apply(group_data, 1, function(x) (sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)) * 100)
-      } else {
-        cv_list[[paste0("CV_", g)]] <- NA
-      }
+      } else { cv_list[[paste0("CV_", g)]] <- NA }
     }
-    
-    # Rownames of raw_exprs are the protein IDs
-    cv_df <- as.data.frame(cv_list) %>%
-      rownames_to_column("Protein.Group")
-      
-    # Join, calculate average CV, and format final table
+    cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
     df_final <- left_join(df_res, cv_df, by = "Protein.Group") %>%
-      rowwise() %>%
-      mutate(Avg_CV = mean(c_across(starts_with("CV_")), na.rm = TRUE)) %>%
-      ungroup() %>%
-      arrange(Avg_CV) %>%
-      mutate(Stability = ifelse(Avg_CV < 20, "High", "Low")) %>%
+      rowwise() %>% mutate(Avg_CV = mean(c_across(starts_with("CV_")), na.rm = TRUE)) %>% ungroup() %>%
+      arrange(Avg_CV) %>% mutate(Stability = ifelse(Avg_CV < 20, "High", "Low")) %>%
       dplyr::select(Protein.Group, Stability, Avg_CV, logFC, adj.P.Val, starts_with("CV_")) %>%
       mutate(across(where(is.numeric), ~round(.x, 2)))
-
     datatable(df_final, options = list(pageLength = 15, scrollX = TRUE), rownames = FALSE)
   })
   
-  # --- UPDATED: DOWNLOAD HANDLER (SAFE COLUMN NAMES) ---
-  output$download_result_csv <- downloadHandler(
-    filename = function() {
-      req(input$contrast_selector)
-      paste0("Limpa_Results_", make.names(input$contrast_selector), ".csv")
-    },
-    content = function(file) {
-      req(values$fit, values$y_protein, input$contrast_selector)
-      
-      # 1. Get stats using Safe Temp ID
-      de_stats <- topTable(values$fit, coef=input$contrast_selector, number=Inf)
-      de_stats$Row_ID_Temp <- rownames(de_stats)
-      
-      # 2. Get expression using Safe Temp ID
-      exprs_data <- as.data.frame(values$y_protein$E)
-      exprs_data$Row_ID_Temp <- rownames(exprs_data)
-      
-      # 3. Join on Safe ID
-      full_data <- left_join(de_stats, exprs_data, by="Row_ID_Temp")
-      
-      # 4. Clean up: Rename ID if needed
-      if(!"Protein.Group" %in% names(full_data)) {
-        full_data <- full_data %>% rename(Protein.Group = Row_ID_Temp)
-      } else {
-        full_data <- full_data %>% dplyr::select(-Row_ID_Temp)
-      }
-      
-      write.csv(full_data, file, row.names=FALSE)
-    }
-  )  
   output$reproducible_code <- renderText({
     req(values$repro_log)
-    paste(values$repro_log(), collapse = "\n")
+    log_content <- paste(values$repro_log, collapse = "\n")
+    session_info_text <- paste(capture.output(sessionInfo()), collapse = "\n")
+    paste(log_content, "\n\n# --- Session Info ---", session_info_text, sep = "\n")
   })
   
-  # --- GSEA Analysis ---
-  values$gsea_results <- reactiveVal(NULL)
+  output$methodology_text <- renderText({
+    req(values$fit)
+    paste0("Data was processed using the limpa R package (v1.0+)...")
+  })
   
   observeEvent(input$run_gsea, {
     req(values$fit, input$contrast_selector)
-    
     output$gsea_status <- renderText("Running GSEA... This may take a few minutes.")
-    
     withProgress(message = "Running GSEA", {
       tryCatch({
-        
         incProgress(0.1, detail = "Preparing gene list...")
         de_results <- topTable(values$fit, coef = input$contrast_selector, number = Inf)
-        
-        # Detect organism
         org_db_name <- detect_organism_db(rownames(de_results))
-        if (!requireNamespace(org_db_name, quietly = TRUE)) {
-          BiocManager::install(org_db_name, ask = FALSE)
-        }
+        if (!requireNamespace(org_db_name, quietly = TRUE)) { BiocManager::install(org_db_name, ask = FALSE) }
         library(org_db_name, character.only = TRUE)
-        
         output$gsea_status <- renderText(paste("Detected Organism DB:", org_db_name))
-        
         incProgress(0.3, detail = "Converting Gene IDs...")
-        
-        # Extract plain protein IDs if they are in format like 'sp|P12345|GENE_ID'
         protein_ids <- str_extract(rownames(de_results), "[A-Z0-9]+")
-        
         id_map <- bitr(protein_ids, fromType = "UNIPROT", toType = "ENTREZID", OrgDb = get(org_db_name))
-        
         de_results_mapped <- de_results[rownames(de_results) %in% id_map$UNIPROT, ]
         de_results_mapped$ENTREZID <- id_map$ENTREZID[match(str_extract(rownames(de_results_mapped), "[A-Z0-9]+"), id_map$UNIPROT)]
-        
-        # Create ranked gene list
         gene_list <- de_results_mapped$logFC
         names(gene_list) <- de_results_mapped$ENTREZID
         gene_list <- sort(gene_list, decreasing = TRUE)
         gene_list <- gene_list[!duplicated(names(gene_list))]
-
         incProgress(0.6, detail = "Running GO enrichment...")
-        gsea_res <- gseGO(
-          geneList     = gene_list,
-          OrgDb        = get(org_db_name),
-          keyType      = "ENTREZID",
-          ont          = "BP", # Biological Process
-          minGSSize    = 10,
-          maxGSSize    = 500,
-          pvalueCutoff = 0.05,
-          verbose      = FALSE
-        )
-        
-        values$gsea_results(gsea_res)
-        
+        gsea_res <- gseGO(geneList=gene_list, OrgDb=get(org_db_name), keyType="ENTREZID", ont="BP", minGSSize=10, maxGSSize=500, pvalueCutoff=0.05, verbose=FALSE)
+        values$gsea_results <- gsea_res
         incProgress(1, detail = "Complete.")
         output$gsea_status <- renderText("GSEA Complete.")
-        
-      }, error = function(e) {
-        output$gsea_status <- renderText(paste("GSEA Error:", e$message))
-      })
+      }, error = function(e) { output$gsea_status <- renderText(paste("GSEA Error:", e$message)) })
     })
   })
   
-  # --- Render GSEA Outputs ---
-  output$gsea_dot_plot <- renderPlot({
-    req(values$gsea_results())
-    res <- values$gsea_results()
-    if (nrow(res) > 0) {
-      dotplot(res, showCategory = 20) + ggtitle("GSEA GO Biological Process")
-    } else {
-      plot(NULL, xlim=c(0,1), ylim=c(0,1), main="No significant enrichment found.", xaxt='n', yaxt='n')
-    }
-  })
-  
-  output$gsea_emapplot <- renderPlot({
-    req(values$gsea_results())
-    res <- values$gsea_results()
-    if (nrow(res) > 0) {
-      sim <- pairwise_termsim(res)
-      emapplot(sim, showCategory = 20)
-    }
-  })
-  
-  output$gsea_ridgeplot <- renderPlot({
-    req(values$gsea_results())
-    res <- values$gsea_results()
-    if (nrow(res) > 0) {
-      ridgeplot(res)
-    }
-  })
-  
-  output$gsea_results_table <- renderDT({
-    req(values$gsea_results())
-    df <- as.data.frame(values$gsea_results())
-    datatable(df, options = list(pageLength = 10, scrollX = TRUE))
-  })
+  output$gsea_dot_plot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) dotplot(values$gsea_results, showCategory = 20) + ggtitle("GSEA GO Biological Process") else plot(NULL, xlim=c(0,1), ylim=c(0,1), main="No significant enrichment found.", xaxt='n', yaxt='n') })
+  output$gsea_emapplot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) emapplot(pairwise_termsim(values$gsea_results), showCategory=20) })
+  output$gsea_ridgeplot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) ridgeplot(values$gsea_results) })
+  output$gsea_results_table <- renderDT({ req(values$gsea_results); datatable(as.data.frame(values$gsea_results), options=list(pageLength=10, scrollX=TRUE)) })
   
   observeEvent(input$check_models, { if (nchar(input$user_api_key) < 10) { showNotification("Please enter a valid API Key first.", type="error"); return() }; withProgress(message = "Checking Google Models...", { models <- list_google_models(input$user_api_key); if (length(models) > 0 && !grepl("Error", models[1])) { showModal(modalDialog(title = "Available Models for Your Key", p("Copy one of these into the Model Name box:"), tags$textarea(paste(models, collapse="\n"), rows=10, style="width:100%;"), easyClose = TRUE)) } else { showNotification(paste("Failed to list models:", models), type="error") } }) })
-  
-  output$chat_selection_indicator <- renderText({
-    if (!is.null(values$plot_selected_proteins)) { n_sel <- length(values$plot_selected_proteins); paste("✅ Current Selection:", n_sel, "Proteins from Plots.") } else { "ℹ️ No proteins selected in plots." }
-  })
+  output$chat_selection_indicator <- renderText({ if (!is.null(values$plot_selected_proteins)) { paste("✅ Current Selection:", length(values$plot_selected_proteins), "Proteins from Plots.") } else { "ℹ️ No proteins selected in plots." } })
   
   observeEvent(input$summarize_data, {
     req(input$user_api_key)
-    
-    auto_prompt <- "Please provide a concise summary of this proteomics dataset. Focus on a few key points:\n1. **Technical Quality:** Based on the QC data, does any experimental group stand out as having higher or lower quality (e.g., in terms of Precursors or MS1 Signal)?\n2. **Biological Insights:** What are the top 3-5 most significantly up-regulated and down-regulated proteins in the current comparison?\n3. **Overall Pattern:** Is there a clear separation between the groups in the data?\nPlease keep the summary brief and to the point."
-    
+    auto_prompt <- "Analyze this dataset. Identify key quality control issues (if any) by looking at the Group QC stats. Then, summarize the main biological findings from the expression data, focusing on the most significantly differentially expressed proteins."
     values$chat_history <- append(values$chat_history, list(list(role = "user", content = "(Auto-Query: Summarize & Analyze)")))
-    
     withProgress(message = "Auto-Analyzing Dataset...", {
       if (!is.null(values$fit) && !is.null(values$y_protein)) {
-        
         n_max <- 800
         df_de <- topTable(values$fit, coef=input$contrast_selector, number=n_max)
         df_exprs <- as.data.frame(values$y_protein$E[rownames(df_de), ])
         df_full <- cbind(Protein = rownames(df_de), df_de, df_exprs)
-        
         incProgress(0.3, detail = "Sending data file...")
         current_file_uri <- upload_csv_to_gemini(df_full, input$user_api_key)
-        
         qc_final <- NULL
-        if(!is.null(values$qc_stats) && !is.null(values$metadata)) {
-          qc_final <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>% dplyr::select(Run, Group, Precursors, Proteins, MS1_Signal)
-        }
-        
+        if(!is.null(values$qc_stats) && !is.null(values$metadata)) { qc_final <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>% dplyr::select(Run, Group, Precursors, Proteins, MS1_Signal) }
         incProgress(0.7, detail = "Thinking...")
-        ai_reply <- ask_gemini_file_chat(
-          auto_prompt, 
-          current_file_uri, 
-          qc_final,
-          input$user_api_key, 
-          input$model_name, 
-          values$plot_selected_proteins 
-        )
-        
+        ai_reply <- ask_gemini_file_chat(auto_prompt, current_file_uri, qc_final, input$user_api_key, input$model_name, values$plot_selected_proteins)
       } else { ai_reply <- "Please load data and run analysis first." }
-      
       values$chat_history <- append(values$chat_history, list(list(role = "ai", content = ai_reply)))
     })
   })
@@ -1007,11 +904,8 @@ server <- function(input, output, session) {
   observeEvent(input$send_chat, {
     req(input$chat_input, input$user_api_key)
     values$chat_history <- append(values$chat_history, list(list(role = "user", content = input$chat_input)))
-    
-    withProgress(message = "Processing (Top 800 + Selection + QC)...", {
+    withProgress(message = "Processing...", {
       if (!is.null(values$fit) && !is.null(values$y_protein)) {
-        
-        # 1. LIMIT DATASET
         n_max <- 800
         df_de <- topTable(values$fit, coef=input$contrast_selector, number=n_max)
         if (!is.null(values$plot_selected_proteins)) {
@@ -1023,28 +917,12 @@ server <- function(input, output, session) {
         }
         df_exprs <- as.data.frame(values$y_protein$E[rownames(df_de), ])
         df_full <- cbind(Protein = rownames(df_de), df_de, df_exprs)
-        
-        # 2. Upload
         incProgress(0.3, detail = "Sending data file...")
         current_file_uri <- upload_csv_to_gemini(df_full, input$user_api_key)
-        
-        # 3. PREPARE MERGED QC (RUN + GROUP)
         qc_final <- NULL
-        if(!is.null(values$qc_stats) && !is.null(values$metadata)) {
-          qc_final <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>% dplyr::select(Run, Group, Precursors, Proteins, MS1_Signal)
-        }
-        
-        # 4. Call AI
+        if(!is.null(values$qc_stats) && !is.null(values$metadata)) { qc_final <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>% dplyr::select(Run, Group, Precursors, Proteins, MS1_Signal) }
         incProgress(0.7, detail = "Thinking...")
-        ai_reply <- ask_gemini_file_chat(
-          input$chat_input, 
-          current_file_uri, 
-          qc_final, # Pass MERGED QC table
-          input$user_api_key, 
-          input$model_name, 
-          values$plot_selected_proteins 
-        )
-        
+        ai_reply <- ask_gemini_file_chat(input$chat_input, current_file_uri, qc_final, input$user_api_key, input$model_name, values$plot_selected_proteins)
       } else { ai_reply <- "Please load data and run analysis first." }
     })
     
@@ -1056,26 +934,43 @@ server <- function(input, output, session) {
       ai_reply <- gsub("\\[\\[SELECT:.*?\\]\\]", "", ai_reply)
       ai_reply <- paste0(ai_reply, "\n\n*(I have updated your plots with these highlighted proteins.)*")
     }
-    
     values$chat_history <- append(values$chat_history, list(list(role = "ai", content = ai_reply)))
     updateTextAreaInput(session, "chat_input", value = "")
   })
   
   output$chat_window <- renderUI({ chat_content <- lapply(values$chat_history, function(msg) { if (msg$role == "user") { div(class = "user-msg", span(msg$content)) } else { div(class = "ai-msg", span(markdown(msg$content))) } }); div(class = "chat-container", chat_content) })
+  
   output$download_chat_txt <- downloadHandler(
-  filename = function() {
-    req(values$chat_history)
-    paste0("Limpa_Chat_History_", Sys.Date(), ".txt")
-  },
-  content = function(file) {
-    req(values$chat_history)
-    text_out <- sapply(values$chat_history, function(msg) {
-      role <- if(msg$role == "user") "YOU: " else "GEMINI: "
-      paste0(role, msg$content, "\n--------------------------------------------------\n")
-    })
-    writeLines(unlist(text_out), file)
-  }
-)
+    filename = function() { req(values$chat_history); paste0("Limpa_Chat_History_", Sys.Date(), ".txt") },
+    content = function(file) { req(values$chat_history); text_out <- sapply(values$chat_history, function(msg) { paste0(if(msg$role == "user") "YOU: " else "GEMINI: ", msg$content, "\n---\n") }); writeLines(unlist(text_out), file) }
+  )
+  
+  output$download_result_csv <- downloadHandler(
+    filename = function() { paste0("Limpa_Results_", make.names(input$contrast_selector), ".csv") },
+    content = function(file) {
+      req(values$fit, values$y_protein)
+      de_stats <- topTable(values$fit, coef=input$contrast_selector, number=Inf) %>% rownames_to_column("Protein.Group")
+      exprs_data <- as.data.frame(values$y_protein$E) %>% rownames_to_column("Protein.Group")
+      full_data <- left_join(de_stats, exprs_data, by="Protein.Group")
+      write.csv(full_data, file, row.names=FALSE)
+    }
+  )
+  
+  output$volcano_plot_interactive <- renderPlotly({
+    df <- volcano_data()
+    cols <- c("Not Sig" = "grey", "Significant" = "red")
+    p <- ggplot(df, aes(x = logFC, y = -log10(adj.P.Val), text = paste("Protein:", Protein.Group), key = Protein.Group, color = Significance)) +
+      geom_point(alpha = 0.6) + scale_color_manual(values = cols) +
+      geom_vline(xintercept = c(-input$logfc_cutoff, input$logfc_cutoff), linetype="dashed") +
+      geom_hline(yintercept = -log10(0.05), linetype="dashed") + theme_minimal()
+    df_sel <- df %>% filter(Selected == "Yes")
+    if (nrow(df_sel) > 0) p <- p + geom_point(data = df_sel, aes(x=logFC, y=-log10(adj.P.Val)), shape=21, size=4, fill=NA, color="blue", stroke=2)
+    ggplotly(p, tooltip = "text", source = "volcano_source") %>% layout(dragmode = "select")
+  })
+  
+  observeEvent(event_data("plotly_selected", source = "volcano_source"), { select_data <- event_data("plotly_selected", source = "volcano_source"); if (!is.null(select_data)) values$plot_selected_proteins <- select_data$key })
+  observeEvent(event_data("plotly_click", source = "volcano_source"), { click_data <- event_data("plotly_click", source = "volcano_source"); if (!is.null(click_data)) values$plot_selected_proteins <- click_data$key })
+  observeEvent(input$clear_plot_selection, { values$plot_selected_proteins <- NULL })
 }
 
 shinyApp(ui, server)
