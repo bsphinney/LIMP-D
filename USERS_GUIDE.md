@@ -1,80 +1,123 @@
-# LIMP-D User Guide
+# 📘 DE-LIMP User Guide
 
-Welcome to LIMP-D, the Limpa Proteomics Dashboard. This guide will walk you through the steps to analyze your DIA-NN proteomics data, from initial upload to advanced AI-powered insights.
+Welcome to **DE-LIMP** (Differential Expression & Limpa Proteomics), your interactive dashboard for analyzing DIA-NN proteomics data. This guide covers the complete workflow, from importing data to discovering biological insights with our integrated AI assistant.
 
 ---
 
 ## 1. Getting Started
 
-### Installation
-Before launching the app, ensure you have installed all the required R packages. You can do this by running the installation command found in the `README.md` file in your R console.
+### Prerequisites
+* **R & RStudio:** Ensure you have R (version 4.2+) installed.
+* **Gemini API Key:** To use the AI Chat features, you will need a Google Gemini API Key. You can get one for free at [Google AI Studio](https://aistudio.google.com/).
 
 ### Launching the App
-1.  Open the `LIMP-D.R` file in RStudio.
-2.  Click the **"Run App"** button that appears at the top of the script editor.
-
-This will launch the LIMP-D dashboard in a new window or in your web browser.
+1.  Open `LIMP-D.R` in RStudio.
+2.  Click the **"Run App"** button at the top right of the script editor.
+3.  The dashboard will launch in your default web browser.
 
 ---
 
-## 2. Step-by-Step Workflow
+## 2. Core Analysis Workflow
 
-The app's sidebar on the left guides you through the main analytical steps.
+Follow the sidebar controls on the left to process your data.
 
 ### Step 2.1: Upload Data
-1.  **DIA-NN Report:** Click the "Browse..." button and select your DIA-NN report file. The app requires the **`.parquet`** format.
-2.  **Q-Value Cutoff:** Set the desired FDR (False Discovery Rate) cutoff for precursor-level data. The default is 0.01 (1%).
+* **Input File:** Click **"Browse..."** and select your DIA-NN report file.
+    * *Requirement:* The file must be in **`.parquet`** format.
+* **Q-Value Cutoff:** Adjust the slider to set your False Discovery Rate (FDR) threshold (Default: 0.01).
 
 ### Step 2.2: Assign Groups
-1.  After your data uploads, a table will appear for assigning experimental groups. You can also open this table by clicking the **"Assign Groups"** button.
-2.  For each file (`File.Name`), type the name of its corresponding experimental group in the `Group` column (e.g., "Control", "Treatment").
-3.  **Auto-Guess:** Use the **"🪄 Auto-Guess"** button to automatically assign groups based on common keywords (e.g., 'control', 'treat') in the filenames.
-4.  Click **"Save & Close"**. This step is crucial for performing differential expression analysis.
+This is the most critical step for statistical analysis.
+1.  Click **"Assign Groups"** (or it will auto-open after upload).
+2.  **The "Magic" Button:** Click **"🪄 Auto-Guess"**. The app will try to detect groups (e.g., "Control", "Treatment", "WT", "KO") based on your filenames.
+3.  **Manual Edit:** If the guess is wrong, click on the cells in the **Group** column and type the correct names.
+4.  Click **"Save & Close"**.
 
-### Step 2.3: Run the Pipeline
-*   Click the blue **"Run Pipeline"** button. This performs normalization, statistical modeling, and differential expression analysis. The status message will update to "✅ Complete!" when finished.
+### Step 2.3: Run Pipeline
+* Click the blue **"Run Pipeline"** button.
+* **What happens?** The app uses the `limpa` package to perform DPC normalization and the `limma` package to fit linear models for differential expression.
+* Wait for the status to change to **"✅ Complete!"**.
 
-### Step 2.4: Explore Results
-Once the pipeline is complete, you can explore your data using the main tabs.
-
-#### Data Overview Pane
-*   **Summary:** View key statistics about your dataset, including the total number of files and the calculated dynamic range of protein signals in orders of magnitude.
-*   **Signal Distribution Plot:** This plot shows the signal intensity for every protein in your dataset.
-    *   Click **"Color by DE Status"** to color the points based on whether they are up-regulated, down-regulated, or not significant in the currently selected comparison.
-    *   If you select proteins via the AI chat, they will be automatically highlighted and labeled on this plot.
-*   **Group QC Summary:** A table showing the average Precursors, MS1 Signal, and identified Proteins for each experimental group.
-
-#### QC Panes (Trends & Plots)
-*   Use these tabs to assess the quality of your data. View trends across runs, check for outliers with the MDS plot, and examine the distribution of QC metrics for each group with violin plots.
-
-#### DE Dashboard Pane
-*   **Volcano Plot:** Interactively explore differential expression results. Click on a point or draw a box to select proteins.
-*   **Results Table:** This table automatically filters to show only the proteins you've selected in the Volcano Plot.
-*   **Heatmap:** Visualizes the expression patterns of your selected proteins across all samples.
-*   **Buttons:** Use the buttons at the top of the Results Table to generate violin plots of selected proteins or export the full DE results to a CSV file.
-
-#### Gene Set Enrichment Analysis (GSEA) Pane
-1.  Ensure you have selected a comparison in the sidebar.
-2.  Click **"Run GSEA"**. The app automatically detects the organism (e.g., Human, Mouse, Rat) from your protein IDs and runs the analysis.
-3.  Explore the results in the tabs:
-    *   **Dot Plot:** An overview of the most significant Gene Ontology (GO) terms.
-    *   **Enrichment Map:** A network showing how enriched GO terms are related to each other.
-    *   **Ridgeplot:** Shows the distribution of your significant genes within the top enriched GO terms.
-    *   **Results Table:** A searchable table of all enriched GO terms.
-
-#### Data Chat Pane (Gemini AI)
-This panel allows you to ask questions about your data in plain English.
-1.  **API Key:** Enter your Google AI Gemini API key.
-2.  **Ask a Question:** Type a question in the text box and click "Send". The AI has access to your QC data and the Top 800 DE proteins.
-3.  **Auto-Analyze:** Click the **"🤖 Auto-Analyze"** button to send a pre-defined prompt that asks the AI to provide a concise summary of your dataset's technical quality and key biological findings.
-4.  **Bidirectional Interaction:**
-    *   When the AI mentions specific proteins in its response (e.g., `[[SELECT: P12345]]`), the Volcano Plot and the Signal Distribution plot will automatically update to highlight and label them.
-    *   If you select proteins on the Volcano Plot, the AI will be notified to focus its analysis on your selection for your next question.
+### Step 2.4: Select Comparison
+* Use the **"Comparison"** dropdown to select which contrast you want to view (e.g., `Treatment - Control`).
 
 ---
 
-## 3. FAQ
-*   **Why is the app crashing on startup?**
-    *   Please ensure you have run the installation command in the `README.md` to install all required packages. An older version of R may also cause issues if it does not support certain syntax used in the app.
-*   **Why did the GSEA fail?**
-    *   GSEA requires an internet connection to download annotation packages. Ensure you are online. For automatic organism detection to work best, your protein IDs should be in a standard format that includes a UniProt organism suffix (e.g., `P12345_HUMAN`).
+## 3. Deep Dive: The Data Overview & Grid View
+
+### 📊 Data Overview
+This is your landing page.
+* **Signal Plot:** Visualizes the dynamic range of your experiment.
+    * Click **"Color by DE Status"** to see which proteins are Up/Down-regulated in your current comparison.
+* **Group Summary:** A quick table showing average precursor and protein counts per group.
+
+### 🔬 The Grid View (New!)
+Click the green **"Open Grid View"** button to open the deep-dive table.
+
+#### **Key Features:**
+1.  **Bi-Directional Filtering:**
+    * If you select proteins in the **Volcano Plot** (DE Dashboard) or if the **AI** selects interesting proteins, the Grid View automatically filters to show *only those proteins*.
+    * Click **"Show All / Clear Selection"** in the footer to reset the view.
+2.  **Compact Headers:**
+    * Columns are labeled with **Run Numbers** (1, 2, 3...) to save space.
+    * **Hover** your mouse over a number to see the full **File Name** and **Group**.
+    * Headers are **color-coded** by Experimental Group (refer to the Legend at the top).
+3.  **Heatmap Coloring:** Cell values (Log2 Intensity) are colored Blue (Low) to Red (High) for identifying patterns at a glance.
+4.  **UniProt Integration:** Click any **Protein ID** to open its official UniProt page in a new tab.
+5.  **Click-to-Plot:** Click any row in the table to instantly open a **Violin Plot** showing that specific protein's expression across all samples.
+6.  **Smart Export:** Click **"Export Full Table"** to download the data as a CSV. The export will use the **Full Filenames** in the header (not the Run Numbers) for publication use.
+
+---
+
+## 4. Visualizing Results
+
+### 📉 DE Dashboard
+* **Volcano Plot:** Interactive! Click points to select them. Box-select multiple points to analyze a cluster.
+    * *Sync:* Selecting points here updates the Grid View and the AI context.
+* **Heatmap:** Automatically scales and clusters the top 50 significant proteins (or your specific selection).
+
+### 📐 QC Trends & Plots
+* **Trends:** Check "Precursors per Run" to spot batch effects or instrument drift.
+* **MDS Plot:** A multidimensional scaling plot to visualize how samples cluster. (Good samples should cluster by Group).
+
+### 🧬 Gene Set Enrichment (GSEA)
+1.  Click **"Run GSEA"**.
+2.  The app automatically detects if your data is Human, Mouse, or Rat based on UniProt suffixes.
+3.  View results as Dot Plots, Enrichment Maps (networks), or Ridgeplots to understand biological pathways.
+
+---
+
+## 5. 🤖 AI Chat (Gemini Integration)
+
+DE-LIMP features a context-aware AI assistant.
+
+### Setup
+1.  Paste your **Gemini API Key** in the sidebar.
+2.  (Optional) Change the Model Name if you want to use a specific version (Default: `gemini-1.5-flash`).
+
+### "Chat with Your Data"
+You aren't just chatting with a bot; you are chatting with **your specific dataset**.
+* **Auto-Analyze:** Click this button to generate a comprehensive report summarizing QC quality and the top biological findings.
+* **Ask Questions:**
+    * *"Which group has the highest variance?"*
+    * *"Are there any mitochondrial proteins upregulated?"*
+    * *"Generate a figure caption for the volcano plot."*
+
+### Bi-Directional AI Sync
+* **User -> AI:** Select points on the Volcano Plot. Then ask: *"What are the functions of these selected proteins?"*. The AI knows exactly which ones you clicked.
+* **AI -> User:** If the AI finds interesting proteins (e.g., *"I found several glycolytic enzymes..."*), it will highlight them in your plots automatically.
+
+---
+
+## 6. Troubleshooting
+
+| Issue | Solution |
+| :--- | :--- |
+| **App crashes on startup** | Run the installation commands in the `README.md` to ensure `limpa`, `limma`, and `shiny` are installed. |
+| **GSEA fails** | Ensure you are connected to the internet (it needs to download gene ontologies). |
+| **Grid View "Object not found"** | Ensure you have run the pipeline first. The Grid View requires processed data. |
+| **AI says "No data"** | Click the "Run Pipeline" button first. The AI needs the statistical results to answer questions. |
+
+---
+
+*Happy analyzing!* 🧬
