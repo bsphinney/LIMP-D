@@ -8,10 +8,21 @@ Welcome to **DE-LIMP** (Differential Expression & Limpa Proteomics), your intera
 
 ### Prerequisites
 * **R & RStudio:** Ensure you have R (version 4.2+) installed.
-* **Gemini API Key:** To use the AI Chat features, you will need a Google Gemini API Key. You can get one for free at [Google AI Studio](https://aistudio.google.com/).
+* **Gemini API Key:** Required for AI Chat features (See below).
 
-### Launching the App
-1.  Open `LIMP-D.R` in RStudio.
+### 🔑 1.1 How to Obtain a Free Gemini API Key
+To use the "Chat with Data" features, you need a key from Google. It is free for standard use.
+
+1.  Go to **[Google AI Studio](https://aistudio.google.com/)**.
+2.  Sign in with your Google Account.
+3.  In the top-left corner, click the blue button **"Get API key"**.
+4.  Click **"Create API key"**.
+    * If asked, select "Create API key in new project".
+5.  Copy the long string of text that appears (it starts with `AIza...`).
+6.  **Paste this key** into the "Gemini API Key" box in the DE-LIMP sidebar.
+
+### 1.2 Launching the App
+1.  Open `DE-LIMP.R` in RStudio.
 2.  Click the **"Run App"** button at the top right of the script editor.
 3.  The dashboard will launch in your default web browser.
 
@@ -24,6 +35,7 @@ Follow the sidebar controls on the left to process your data.
 ### Step 2.1: Upload Data
 * **Input File:** Click **"Browse..."** and select your DIA-NN report file.
     * *Requirement:* The file must be in **`.parquet`** format.
+    * *Need Data?* Download our [Example Data](example_data.parquet) from the repository.
 * **Q-Value Cutoff:** Adjust the slider to set your False Discovery Rate (FDR) threshold (Default: 0.01).
 
 ### Step 2.2: Assign Groups
@@ -74,6 +86,7 @@ Click the green **"Open Grid View"** button to open the deep-dive table.
 ### 📉 DE Dashboard
 * **Volcano Plot:** Interactive! Click points to select them. Box-select multiple points to analyze a cluster.
     * *Sync:* Selecting points here updates the Grid View and the AI context.
+* **Violin Plots:** Select a protein in the volcano plot and click the **"📊 Violin Plot"** button to see its expression profile.
 * **Heatmap:** Automatically scales and clusters the top 50 significant proteins (or your specific selection).
 
 ### 📐 QC Trends & Plots
@@ -93,7 +106,7 @@ DE-LIMP features a context-aware AI assistant.
 
 ### Setup
 1.  Paste your **Gemini API Key** in the sidebar.
-2.  (Optional) Change the Model Name if you want to use a specific version (Default: `gemini-1.5-flash`).
+2.  (Optional) Change the Model Name if you want to use a specific version (Default: `gemini-3-flash-preview`).
 
 ### "Chat with Your Data"
 You aren't just chatting with a bot; you are chatting with **your specific dataset**.
