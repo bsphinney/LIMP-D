@@ -35,7 +35,7 @@ Follow the sidebar controls on the left to process your data.
 ### Step 2.1: Upload Data
 * **Input File:** Click **"Browse..."** and select your DIA-NN report file.
     * *Requirement:* The file must be in **`.parquet`** format.
-    * *Need Data?* Download our [Example Data](example_data.parquet) from the repository.
+    * *Need Data?* Download our [Example Data](https://github.com/bsphinney/DE-LIMP/releases/tag/v1.0) from the repository.
 * **Q-Value Cutoff:** Adjust the slider to set your False Discovery Rate (FDR) threshold (Default: 0.01).
 
 ### Step 2.2: Assign Groups
