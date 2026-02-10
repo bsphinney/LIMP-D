@@ -1,5 +1,14 @@
 # DE-LIMP Project Context for Claude
 
+## Working Preferences (for Claude)
+**IMPORTANT**: Proactively suggest updates to this file when you notice:
+- New important patterns or gotchas that emerge during work
+- Solutions to non-trivial problems that should be documented
+- Architectural decisions or implementation details worth preserving
+- Common mistakes or confusing aspects that need clarification
+
+Don't wait to be asked - suggest adding these to CLAUDE.md to help future sessions!
+
 ## Project Overview
 DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package for differential expression analysis of DIA-NN data.
 
