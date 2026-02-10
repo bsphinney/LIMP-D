@@ -4,19 +4,108 @@
 #  Status: Production Ready (Hugging Face Compatible v1.2)
 # ==============================================================================
 
+# Set CRAN mirror to avoid interactive popup (especially in VS Code)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
 # --- 1. AUTO-INSTALLATION & SETUP ---
+# IMPORTANT: Install packages BEFORE loading libraries to avoid conflicts
+
+# Install BiocManager if needed
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   message("BiocManager not found. Installing...")
-  install.packages("BiocManager")
+  install.packages("BiocManager", quiet = TRUE)
 }
 
-required_pkgs <- c("limma", "limpa", "ComplexHeatmap", "shinyjs", "plotly", "DT", "tidyr", "tibble", "stringr", "curl", "clusterProfiler", "AnnotationDbi", "org.Hs.eg.db", "org.Mm.eg.db", "enrichplot", "ggridges", "ggrepel", "httr2", "markdown")
+# Check for limpa and install if needed
+if (!requireNamespace("limpa", quietly = TRUE)) {
+  message("Package 'limpa' is missing. Attempting installation...")
 
+  r_version <- getRversion()
+  bioc_version <- as.character(BiocManager::version())
+  message(paste0("R version: ", r_version, ", Bioconductor version: ", bioc_version))
+
+  # Try installing from Bioconductor (may require devel version)
+  limpa_installed <- tryCatch({
+    suppressWarnings({
+      BiocManager::install("limpa", ask = FALSE, update = FALSE, quiet = TRUE)
+    })
+    requireNamespace("limpa", quietly = TRUE)
+  }, error = function(e) FALSE)
+
+  # If standard Bioconductor failed, try development version
+  if (!limpa_installed) {
+    message("limpa not found in release version. Trying Bioconductor devel...")
+    limpa_installed <- tryCatch({
+      suppressWarnings({
+        BiocManager::install(version = "devel", ask = FALSE, update = FALSE)
+        BiocManager::install("limpa", ask = FALSE, update = FALSE, quiet = TRUE)
+      })
+      requireNamespace("limpa", quietly = TRUE)
+    }, error = function(e) FALSE)
+  }
+
+  # Final check
+  if (!limpa_installed) {
+
+    # Detect platform for specific instructions
+    os_type <- Sys.info()["sysname"]
+    download_url <- if (os_type == "Darwin") {
+      "https://cloud.r-project.org/bin/macosx/"
+    } else if (os_type == "Windows") {
+      "https://cloud.r-project.org/bin/windows/base/"
+    } else {
+      "https://cloud.r-project.org/bin/linux/"
+    }
+
+    stop(paste0(
+      "\n\n╔════════════════════════════════════════════════════════════════╗\n",
+      "║          LIMPA INSTALLATION FAILED - R UPGRADE NEEDED          ║\n",
+      "╚════════════════════════════════════════════════════════════════╝\n\n",
+      "Current setup:\n",
+      "  • R version: ", r_version, " (NEED: 4.5+)\n",
+      "  • Bioconductor: ", bioc_version, " (NEED: 3.22+)\n",
+      "  • Platform: ", os_type, "\n\n",
+      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+      "UPGRADE INSTRUCTIONS:\n",
+      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n",
+      "1. Download R 4.5+ for your platform:\n",
+      "   ", download_url, "\n\n",
+      if (os_type == "Darwin") {
+        "2. Install the .pkg file (R will be upgraded in-place)\n"
+      } else if (os_type == "Windows") {
+        "2. Run the installer .exe file\n"
+      } else {
+        "2. Follow platform-specific installation instructions\n"
+      },
+      "\n3. Restart VSCode/RStudio completely\n",
+      "\n4. Verify upgrade by running: R.version.string\n",
+      "\n5. Rerun this script - limpa will install automatically\n\n",
+      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n",
+      "More info: https://bioconductor.org/packages/limpa/\n\n"
+    ))
+  } else {
+    message("✓ limpa installed successfully!")
+  }
+}
+
+# Required packages (excluding limpa which was handled above)
+required_pkgs <- c("shiny", "bslib", "readr", "tibble", "dplyr", "tidyr",
+                   "ggplot2", "httr2", "rhandsontable", "DT", "arrow",
+                   "ComplexHeatmap", "shinyjs", "plotly", "stringr", "limma",
+                   "clusterProfiler", "AnnotationDbi", "org.Hs.eg.db", "org.Mm.eg.db",
+                   "enrichplot", "ggridges", "ggrepel", "markdown", "curl")
+
+# Only install truly missing packages (don't update already-loaded packages)
+missing_pkgs <- character(0)
 for (pkg in required_pkgs) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
-    message(paste0("Package '", pkg, "' is missing. Auto-installing..."))
-    BiocManager::install(pkg, ask = FALSE, update = FALSE)
+    missing_pkgs <- c(missing_pkgs, pkg)
   }
+}
+
+if (length(missing_pkgs) > 0) {
+  message(paste0("Installing missing packages: ", paste(missing_pkgs, collapse = ", ")))
+  BiocManager::install(missing_pkgs, ask = FALSE, update = FALSE, quiet = TRUE)
 }
 
 # --- 2. SERVER CONFIGURATION ---
@@ -45,9 +134,25 @@ library(markdown) # Needed for AI formatting
 
 options(shiny.maxRequestSize = 500 * 1024^2)
 
-# Verify Limpa
+# Verify Limpa installation
 if (!requireNamespace("limpa", quietly = TRUE)) {
-  stop("CRITICAL ERROR: 'limpa' failed to install. Please run: BiocManager::install('limpa') manually.")
+  os_type <- Sys.info()["sysname"]
+  download_url <- if (os_type == "Darwin") {
+    "https://cloud.r-project.org/bin/macosx/"
+  } else if (os_type == "Windows") {
+    "https://cloud.r-project.org/bin/windows/base/"
+  } else {
+    "https://cloud.r-project.org/bin/linux/"
+  }
+
+  stop(paste0(
+    "\n\n╔══════════════════════════════════════════════════════════╗\n",
+    "║     CRITICAL: limpa package not found                    ║\n",
+    "╚══════════════════════════════════════════════════════════╝\n\n",
+    "Your R version: ", getRversion(), " (NEED: 4.5+)\n\n",
+    "Upgrade R from: ", download_url, "\n",
+    "Then run: BiocManager::install('limpa')\n\n"
+  ))
 }
 library(limpa) 
 
@@ -307,7 +412,7 @@ ui <- page_sidebar(
               )
     ),
     
-    nav_panel("QC Plots", icon = icon("chart-scatter"),
+    nav_panel("QC Plots", icon = icon("chart-line"),
               layout_columns(col_widths=c(6,6), 
                              card(card_header("DPC Fit"), plotOutput("dpc_plot", height="400px")),
                              card(card_header("MDS Plot"), plotOutput("mds_plot", height="400px"))),
@@ -353,12 +458,13 @@ ui <- page_sidebar(
                               ),
                               p(style="margin-bottom: 0;", "Copy this entire code block to reproduce your analysis in a fresh R session.")
                             ),
+                            downloadButton("download_repro_log", "💾 Download Reproducibility Log", class="btn-success mb-3"),
                             verbatimTextOutput("reproducible_code")
                           )
                 ),
                 nav_panel("Methodology",
                           card_body(
-                            textOutput("methodology_text")
+                            verbatimTextOutput("methodology_text")
                           )
                 )
               )
@@ -978,7 +1084,132 @@ server <- function(input, output, session) {
 
     paste(c(log_content, footer), collapse = "\n")
   })
-  output$methodology_text <- renderText({ req(values$fit); paste0("Data was processed using the limpa R package (v1.0+)...") })
+
+  # Download handler for reproducibility log
+  output$download_repro_log <- downloadHandler(
+    filename = function() {
+      paste0("DE-LIMP_reproducibility_log_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".R")
+    },
+    content = function(file) {
+      req(values$repro_log)
+      log_content <- paste(values$repro_log, collapse = "\n")
+      session_info_text <- paste(capture.output(sessionInfo()), collapse = "\n")
+
+      footer <- c(
+        "",
+        "# ==============================================================================",
+        "# How to Use This Log:",
+        "# 1. Replace 'path/to/your/report.parquet' with your actual file path",
+        "# 2. Ensure all required packages are installed (see Session Info below)",
+        "# 3. Run sections sequentially from top to bottom",
+        "# 4. Each section is timestamped showing when you performed that action",
+        "# ==============================================================================",
+        "",
+        "# --- Session Info (Package Versions) ---",
+        session_info_text
+      )
+
+      writeLines(paste(c(log_content, footer), collapse = "\n"), file)
+    }
+  )
+
+  output$methodology_text <- renderText({
+    req(values$fit)
+
+    methodology <- paste(
+      "METHODOLOGY\n",
+      "===========\n",
+      "Data Processing and Statistical Analysis Pipeline\n",
+      "---------------------------------------------------\n\n",
+
+      "1. DATA INPUT\n",
+      "Raw DIA-NN output files (parquet format) containing precursor-level quantification were\n",
+      "imported using the limpa package. Input data includes precursor intensities, protein\n",
+      "grouping information, and quality metrics (Q-values).\n\n",
+
+      "2. NORMALIZATION\n",
+      "Data Point Correspondence - Cyclic Normalization (DPC-CN) was applied using the dpcCN()\n",
+      "function. This method normalizes signal intensities across runs by identifying invariant\n",
+      "data points and applying cyclic loess normalization to correct for systematic technical\n",
+      "variation while preserving biological differences. DPC-CN is specifically designed for\n",
+      "DIA-NN data and performs robust normalization without requiring reference proteins or\n",
+      "assuming equal protein abundances across samples.\n\n",
+
+      "3. PROTEIN QUANTIFICATION\n",
+      "Normalized precursor-level data were aggregated to protein-level quantification using\n",
+      "dpcQuant(). This function employs a modified version of the maxLFQ algorithm, which:\n",
+      "  • Identifies peptides/precursors unique to each protein group\n",
+      "  • Uses pairwise ratios to estimate relative protein abundance\n",
+      "  • Maximizes information from all available peptides while handling missing values\n",
+      "  • Produces log2-transformed protein intensities for downstream analysis\n\n",
+
+      "4. DIFFERENTIAL EXPRESSION ANALYSIS\n",
+      "Statistical analysis was performed using the limma framework (Linear Models for\n",
+      "Microarray Data), adapted for proteomics data through the dpcDE() function.\n",
+      "The analysis workflow includes:\n\n",
+
+      "  a) Linear Model Fitting:\n",
+      "     A linear model was fit to the log2-transformed protein intensities with experimental\n",
+      "     groups as factors. This model accounts for the mean-variance relationship in the data.\n\n",
+
+      "  b) Empirical Bayes Moderation:\n",
+      "     Variance estimates were moderated across proteins using empirical Bayes methods\n",
+      "     (eBayes()). This 'borrows information' across proteins to stabilize variance estimates,\n",
+      "     particularly beneficial for experiments with limited replicates.\n\n",
+
+      "  c) Contrast Analysis:\n",
+      "     Pairwise comparisons between experimental groups were performed using contrast matrices.\n",
+      "     Each contrast produces:\n",
+      "       • Log2 fold change (logFC): Effect size of differential expression\n",
+      "       • Average expression (AveExpr): Mean log2 intensity across all samples\n",
+      "       • t-statistic: Test statistic for differential expression\n",
+      "       • P-value: Statistical significance of the change\n",
+      "       • Adjusted P-value (adj.P.Val): FDR-corrected p-value using Benjamini-Hochberg method\n\n",
+
+      "5. MULTIPLE TESTING CORRECTION\n",
+      "False Discovery Rate (FDR) control was applied using the Benjamini-Hochberg procedure.\n",
+      "This method controls the expected proportion of false positives among rejected hypotheses,\n",
+      "providing adjusted p-values (adj.P.Val) that account for testing thousands of proteins\n",
+      "simultaneously. Proteins with adj.P.Val < 0.05 are considered statistically significant\n",
+      "at 5% FDR.\n\n",
+
+      "6. GENE SET ENRICHMENT ANALYSIS (Optional)\n",
+      "When performed, over-representation analysis (ORA) was conducted using clusterProfiler.\n",
+      "Significant proteins (adj.P.Val < 0.05) were mapped to Gene Ontology (GO) terms, and\n",
+      "enrichment was tested using hypergeometric distribution with FDR correction.\n\n\n",
+
+      "SOFTWARE AND PACKAGES\n",
+      "---------------------\n",
+      "Primary analysis: limpa R package (Bioconductor 3.22+)\n",
+      "Statistical framework: limma (Linear Models for Microarray and RNA-Seq Data)\n",
+      "Data manipulation: dplyr, tidyr\n",
+      "Visualization: ggplot2, ComplexHeatmap, plotly\n",
+      "Enrichment: clusterProfiler, enrichplot\n",
+      sprintf("R version: %s\n\n\n", R.version.string),
+
+      "REFERENCES\n",
+      "----------\n",
+      "• limpa package: Bioconductor (https://bioconductor.org/packages/limpa/)\n",
+      "• DPC normalization: Designed for DIA-NN proteomics data\n",
+      "• limma: Ritchie ME, et al. (2015) Nucleic Acids Research 43(7):e47\n",
+      "• Empirical Bayes: Smyth GK (2004) Statistical Applications in Genetics and\n",
+      "  Molecular Biology 3:Article3\n",
+      "• FDR control: Benjamini Y, Hochberg Y (1995) Journal of the Royal Statistical\n",
+      "  Society 57(1):289-300\n",
+      "• clusterProfiler: Yu G, et al. (2012) OMICS 16(5):284-287\n\n\n",
+
+      "CITATION\n",
+      "--------\n",
+      "If you use this analysis in your research, please cite:\n",
+      "• The limpa package (Bioconductor)\n",
+      "• The limma package: Ritchie ME, et al. (2015) Nucleic Acids Research\n",
+      "• DIA-NN: Demichev V, et al. (2020) Nature Methods 17:41-44",
+
+      sep = ""
+    )
+
+    methodology
+  })
   
   observeEvent(input$run_gsea, {
     req(values$fit, input$contrast_selector)
