@@ -356,10 +356,7 @@ ui <- page_sidebar(
     numericInput("q_cutoff", "Q-Value Cutoff", value = 0.01, min = 0, max = 0.1, step = 0.01),
     hr(),
     h5("2. Setup"),
-    actionButton("open_setup", "Assign Groups", class = "btn-info w-100", icon = icon("table")),
-    hr(),
-    h5("3. Analyze"),
-    actionButton("run", "Run Pipeline", class = "btn-primary w-100", icon = icon("play")),
+    actionButton("open_setup", "Assign Groups & Run Pipeline", class = "btn-success w-100", icon = icon("table")),
     textOutput("run_status_msg"),
     hr(),
     h5("4. Explore Results"),
@@ -401,7 +398,12 @@ ui <- page_sidebar(
     nav_panel("QC Trends", icon = icon("chart-bar"),
               layout_columns(col_widths=c(12,12),
                              card(
-                               card_header("Trend Analysis"),
+                               card_header(
+                                 div(style="display: flex; justify-content: space-between; align-items: center;",
+                                     span("Trend Analysis"),
+                                     actionButton("fullscreen_trend", "🔍 View Fullscreen", class="btn-info btn-sm")
+                                 )
+                               ),
                                card_body(
                                  selectInput("qc_metric_select", "Metric:", choices = c("Precursors", "Proteins", "MS1_Signal")),
                                  radioButtons("qc_sort_order", "Order By:", choices = c("Run Order", "Group"), inline = TRUE),
@@ -558,7 +560,18 @@ server <- function(input, output, session) {
       tryCatch({
         values$raw_data <- limpa::readDIANN(input$report_file$datapath, format="parquet", q.cutoffs=input$q_cutoff)
         fnames <- sort(colnames(values$raw_data$E))
-        values$metadata <- data.frame(ID = 1:length(fnames), File.Name = fnames, Group = rep("", length(fnames)), stringsAsFactors=FALSE)
+        values$metadata <- data.frame(
+          ID = 1:length(fnames),
+          File.Name = fnames,
+          Group = rep("", length(fnames)),
+          Batch = rep("", length(fnames)),
+          Covariate1 = rep("", length(fnames)),
+          Covariate2 = rep("", length(fnames)),
+          stringsAsFactors=FALSE
+        )
+        # Initialize custom covariate names (user can change these)
+        if(is.null(values$cov1_name)) values$cov1_name <- "Covariate1"
+        if(is.null(values$cov2_name)) values$cov2_name <- "Covariate2"
         click("open_setup") 
       }, error=function(e) { showNotification(paste("Error:", e$message), type="error") })
     })
@@ -573,67 +586,8 @@ server <- function(input, output, session) {
     ))
   })
 
-  observeEvent(input$run, {
-    req(values$raw_data, values$metadata); meta <- values$metadata; meta$Group <- trimws(meta$Group)
-    if(length(unique(meta$Group)) < 2) { showNotification("Error: Need at least 2 groups.", type="error"); return() }
-
-    # --- Log Pipeline Execution ---
-    pipeline_code <- c(
-      "# Normalization & Quantification",
-      "dpcfit <- dpcCN(dat)",
-      "y_protein <- dpcQuant(dat, 'Protein.Group', dpc=dpcfit)",
-      "",
-      "# Experimental Design",
-      "group_map <- c(",
-      paste(sprintf("  '%s' = '%s'", meta$File.Name, meta$Group), collapse=",\n"),
-      ")",
-      "metadata <- data.frame(File.Name = names(group_map), Group = group_map)",
-      "metadata <- metadata[match(colnames(dat$E), metadata$File.Name), ]",
-      "groups <- factor(metadata$Group)",
-      "design <- model.matrix(~ 0 + groups)",
-      "colnames(design) <- levels(groups)",
-      "",
-      "# Differential Expression Model",
-      "fit <- dpcDE(y_protein, design, plot=FALSE)"
-    )
-
-    add_to_log("Run Pipeline (Main Analysis)", pipeline_code) 
-    
-    withProgress(message='Running Pipeline...', {
-      tryCatch({
-        dat <- values$raw_data;
-        dpcfit <- limpa::dpcCN(dat);
-        values$dpc_fit <- dpcfit;
-
-        values$y_protein <- tryCatch({
-          limpa::dpcQuant(dat, "Protein.Group", dpc=dpcfit)
-        }, error = function(e) {
-          showNotification(paste("Protein quantification failed:", e$message), type = "error", duration = NULL)
-          return(NULL)
-        })
-
-        req(values$y_protein)
-
-        rownames(meta) <- meta$File.Name; meta <- meta[colnames(dat$E), ]; meta$Group <- make.names(meta$Group); groups <- factor(meta$Group)
-        design <- model.matrix(~ 0 + groups); colnames(design) <- levels(groups)
-        combs <- combn(levels(groups), 2); forms <- apply(combs, 2, function(x) paste(x[2], "-", x[1]))
-        fit <- limpa::dpcDE(values$y_protein, design, plot=FALSE); fit <- contrasts.fit(fit, makeContrasts(contrasts=forms, levels=design)); fit <- eBayes(fit)
-        values$fit <- fit; updateSelectInput(session, "contrast_selector", choices=forms); values$status <- "✅ Complete!"
-
-        # Log contrasts
-        contrast_code <- c(
-          sprintf("# Available contrasts: %s", paste(forms, collapse=", ")),
-          "combs <- combn(levels(groups), 2)",
-          "forms <- apply(combs, 2, function(x) paste(x[2], '-', x[1]))",
-          "fit <- contrasts.fit(fit, makeContrasts(contrasts=forms, levels=design))",
-          "fit <- eBayes(fit)"
-        )
-        add_to_log("Contrast Fitting", contrast_code)
-
-        nav_select("main_tabs", "QC Plots")
-      }, error=function(e) showNotification(paste("Error during DE analysis:", e$message), type="error", duration = NULL))
-    })
-  })
+  # Old standalone "Run Pipeline" button observer - REMOVED
+  # Pipeline now runs from the "Assign Groups" modal via run_from_modal observer
   
   # ============================================================================
   #      3. Setup Modal & Metadata Handling
@@ -641,17 +595,67 @@ server <- function(input, output, session) {
   observeEvent(input$open_setup, { 
     req(values$metadata)
     showModal(modalDialog(
-      title = "Assign Groups", size = "xl",
-      actionButton("guess_groups", "🪄 Auto-Guess", class="btn-info btn-sm"), br(), br(),
+      title = "Assign Groups & Run Pipeline", size = "xl",
+      div(style="background-color: #e7f3ff; padding: 10px; border-radius: 5px; margin-bottom: 10px;",
+        icon("info-circle"),
+        strong(" Tip: "),
+        "Assign experimental groups (required). Covariate columns are optional - customize names and include in model as needed."
+      ),
+      layout_columns(col_widths = c(4, 8),
+        div(
+          actionButton("guess_groups", "🪄 Auto-Guess Groups", class="btn-info btn-sm")
+        ),
+        div(
+          strong("Covariates:"),
+          div(style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 5px;",
+            div(
+              checkboxInput("include_batch", "Batch", value = FALSE),
+              textInput("batch_label", NULL, value = "Batch", placeholder = "e.g., Batch")
+            ),
+            div(
+              checkboxInput("include_cov1", NULL, value = FALSE),
+              textInput("cov1_label", "Name:", value = values$cov1_name %||% "Covariate1",
+                       placeholder = "e.g., Sex, Diet")
+            ),
+            div(
+              checkboxInput("include_cov2", NULL, value = FALSE),
+              textInput("cov2_label", "Name:", value = values$cov2_name %||% "Covariate2",
+                       placeholder = "e.g., Age, Time")
+            )
+          )
+        )
+      ),
+      br(),
       rHandsontableOutput("hot_metadata_modal"),
-      footer = tagList(modalButton("Cancel"), actionButton("save_groups", "Save & Close", class="btn-success"))
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("run_from_modal", "▶ Run Pipeline", class="btn-success", icon = icon("play"))
+      )
     ))
   })
 
-  output$hot_metadata_modal <- renderRHandsontable({ 
+  output$hot_metadata_modal <- renderRHandsontable({
     req(values$metadata)
-    rhandsontable(values$metadata, rowHeaders=NULL, stretchH="all", height=500, width="100%") %>%
-      hot_col("ID", readOnly=TRUE, width=50) %>% hot_col("File.Name", readOnly=TRUE) %>% hot_col("Group", type="text") 
+
+    # Get custom covariate names
+    cov1_display <- if(!is.null(input$cov1_label) && input$cov1_label != "") input$cov1_label else "Covariate1"
+    cov2_display <- if(!is.null(input$cov2_label) && input$cov2_label != "") input$cov2_label else "Covariate2"
+
+    # Store for later use
+    values$cov1_name <- cov1_display
+    values$cov2_name <- cov2_display
+
+    # Create display dataframe with custom column names
+    display_df <- values$metadata
+    colnames(display_df) <- c("ID", "File.Name", "Group", "Batch", cov1_display, cov2_display)
+
+    rhandsontable(display_df, rowHeaders=NULL, stretchH="all", height=500, width="100%") %>%
+      hot_col("ID", readOnly=TRUE, width=50) %>%
+      hot_col("File.Name", readOnly=TRUE) %>%
+      hot_col("Group", type="text") %>%
+      hot_col("Batch", type="text", width=100) %>%
+      hot_col(cov1_display, type="text", width=100) %>%
+      hot_col(cov2_display, type="text", width=100)
   })
 
   observeEvent(input$guess_groups, { 
@@ -679,8 +683,11 @@ server <- function(input, output, session) {
     values$metadata <- meta
   })
 
-  observeEvent(input$save_groups, {
-    req(input$hot_metadata_modal, values$metadata)
+  # Run pipeline from modal - saves groups and runs pipeline
+  observeEvent(input$run_from_modal, {
+    req(input$hot_metadata_modal, values$metadata, values$raw_data)
+
+    # First, save the groups
     old_meta <- values$metadata
     new_meta <- hot_to_r(input$hot_metadata_modal)
     changed_indices <- which(old_meta$Group != new_meta$Group)
@@ -692,8 +699,250 @@ server <- function(input, output, session) {
       add_to_log("Manual Group Assignment", code_lines)
     }
     values$metadata <- new_meta
+
+    # Validate groups
+    meta <- values$metadata
+    meta$Group <- trimws(meta$Group)
+    if(length(unique(meta$Group)) < 2) {
+      showNotification("Error: Need at least 2 groups to run pipeline.", type="error", duration = 10)
+      return()
+    }
+
+    # Close modal
     removeModal()
-    showNotification("Groups saved!", type="message")
+    showNotification("Groups saved! Running pipeline...", type="message")
+
+    # Build covariates list for logging
+    covariates_to_log <- character(0)
+    cov_display_names <- character(0)
+
+    if (isTRUE(input$include_batch) && length(unique(meta$Batch[meta$Batch != ""])) > 1) {
+      covariates_to_log <- c(covariates_to_log, "Batch")
+      cov_display_names <- c(cov_display_names, "Batch")
+    }
+    if (isTRUE(input$include_cov1) && length(unique(meta$Covariate1[meta$Covariate1 != ""])) > 1) {
+      covariates_to_log <- c(covariates_to_log, "Covariate1")
+      cov_display_names <- c(cov_display_names, values$cov1_name %||% "Covariate1")
+    }
+    if (isTRUE(input$include_cov2) && length(unique(meta$Covariate2[meta$Covariate2 != ""])) > 1) {
+      covariates_to_log <- c(covariates_to_log, "Covariate2")
+      cov_display_names <- c(cov_display_names, values$cov2_name %||% "Covariate2")
+    }
+
+    # Generate pipeline code for reproducibility log
+    pipeline_code <- c(
+      "# Normalization & Quantification",
+      "dpcfit <- dpcCN(dat)",
+      "y_protein <- dpcQuant(dat, 'Protein.Group', dpc=dpcfit)",
+      ""
+    )
+
+    if (length(covariates_to_log) > 0) {
+      # Log with covariates
+      pipeline_code <- c(pipeline_code,
+        sprintf("# Experimental Design (with covariates: %s)", paste(covariates_to_log, collapse = ", ")),
+        "group_map <- c(",
+        paste(sprintf("  '%s' = '%s'", meta$File.Name, meta$Group), collapse=",\n"),
+        ")"
+      )
+
+      # Add covariate maps
+      if ("Batch" %in% covariates_to_log) {
+        pipeline_code <- c(pipeline_code,
+          "batch_map <- c(",
+          paste(sprintf("  '%s' = '%s'", meta$File.Name, meta$Batch), collapse=",\n"),
+          ")"
+        )
+      }
+      if ("Covariate1" %in% covariates_to_log) {
+        cov1_name <- values$cov1_name %||% "Covariate1"
+        pipeline_code <- c(pipeline_code,
+          sprintf("%s_map <- c(", tolower(gsub(" ", "_", cov1_name))),
+          paste(sprintf("  '%s' = '%s'", meta$File.Name, meta$Covariate1), collapse=",\n"),
+          ")"
+        )
+      }
+      if ("Covariate2" %in% covariates_to_log) {
+        cov2_name <- values$cov2_name %||% "Covariate2"
+        pipeline_code <- c(pipeline_code,
+          sprintf("%s_map <- c(", tolower(gsub(" ", "_", cov2_name))),
+          paste(sprintf("  '%s' = '%s'", meta$File.Name, meta$Covariate2), collapse=",\n"),
+          ")"
+        )
+      }
+
+      # Build metadata dataframe
+      df_cols <- "Group = group_map"
+      if ("Batch" %in% covariates_to_log) df_cols <- paste0(df_cols, ", Batch = batch_map")
+      if ("Covariate1" %in% covariates_to_log) {
+        cov1_name <- values$cov1_name %||% "Covariate1"
+        cov1_var <- tolower(gsub(" ", "_", cov1_name))
+        df_cols <- paste0(df_cols, sprintf(", %s = %s_map", cov1_name, cov1_var))
+      }
+      if ("Covariate2" %in% covariates_to_log) {
+        cov2_name <- values$cov2_name %||% "Covariate2"
+        cov2_var <- tolower(gsub(" ", "_", cov2_name))
+        df_cols <- paste0(df_cols, sprintf(", %s = %s_map", cov2_name, cov2_var))
+      }
+
+      pipeline_code <- c(pipeline_code,
+        sprintf("metadata <- data.frame(File.Name = names(group_map), %s)", df_cols),
+        "metadata <- metadata[match(colnames(dat$E), metadata$File.Name), ]",
+        "groups <- factor(metadata$Group)"
+      )
+
+      # Add factor creation for each covariate
+      if ("Batch" %in% covariates_to_log) {
+        pipeline_code <- c(pipeline_code, "batch <- factor(metadata$Batch)")
+      }
+      if ("Covariate1" %in% covariates_to_log) {
+        cov1_name <- values$cov1_name %||% "Covariate1"
+        cov1_var <- tolower(gsub(" ", "_", cov1_name))
+        pipeline_code <- c(pipeline_code, sprintf("%s <- factor(metadata$%s)", cov1_var, cov1_name))
+      }
+      if ("Covariate2" %in% covariates_to_log) {
+        cov2_name <- values$cov2_name %||% "Covariate2"
+        cov2_var <- tolower(gsub(" ", "_", cov2_name))
+        pipeline_code <- c(pipeline_code, sprintf("%s <- factor(metadata$%s)", cov2_var, cov2_name))
+      }
+
+      # Build design formula with custom names
+      formula_parts <- c("groups")
+      if ("Batch" %in% covariates_to_log) formula_parts <- c(formula_parts, "batch")
+      if ("Covariate1" %in% covariates_to_log) formula_parts <- c(formula_parts, tolower(gsub(" ", "_", values$cov1_name %||% "covariate1")))
+      if ("Covariate2" %in% covariates_to_log) formula_parts <- c(formula_parts, tolower(gsub(" ", "_", values$cov2_name %||% "covariate2")))
+      formula_str <- paste0("~ 0 + ", paste(formula_parts, collapse = " + "))
+      pipeline_code <- c(pipeline_code,
+        sprintf("design <- model.matrix(%s)", formula_str),
+        "colnames(design) <- gsub('groups', '', colnames(design))"
+      )
+
+      pipeline_code <- c(pipeline_code, "",
+        "# Differential Expression Model (with covariates)",
+        "fit <- dpcDE(y_protein, design, plot=FALSE)"
+      )
+    } else {
+      # Log without covariates
+      pipeline_code <- c(pipeline_code,
+        "# Experimental Design",
+        "group_map <- c(",
+        paste(sprintf("  '%s' = '%s'", meta$File.Name, meta$Group), collapse=",\n"),
+        ")",
+        "metadata <- data.frame(File.Name = names(group_map), Group = group_map)",
+        "metadata <- metadata[match(colnames(dat$E), metadata$File.Name), ]",
+        "groups <- factor(metadata$Group)",
+        "design <- model.matrix(~ 0 + groups)",
+        "colnames(design) <- levels(groups)",
+        "",
+        "# Differential Expression Model",
+        "fit <- dpcDE(y_protein, design, plot=FALSE)"
+      )
+    }
+
+    add_to_log("Run Pipeline (Main Analysis)", pipeline_code)
+
+    withProgress(message='Running Pipeline...', {
+      tryCatch({
+        dat <- values$raw_data
+        dpcfit <- limpa::dpcCN(dat)
+        values$dpc_fit <- dpcfit
+
+        values$y_protein <- tryCatch({
+          limpa::dpcQuant(dat, "Protein.Group", dpc=dpcfit)
+        }, error = function(e) {
+          showNotification(paste("Protein quantification failed:", e$message), type = "error", duration = NULL)
+          return(NULL)
+        })
+
+        req(values$y_protein)
+
+        rownames(meta) <- meta$File.Name
+        meta <- meta[colnames(dat$E), ]
+        meta$Group <- make.names(meta$Group)
+        groups <- factor(meta$Group)
+
+        # Build design formula with selected covariates
+        covariates_to_include <- character(0)
+        covariate_messages <- character(0)
+
+        # Check each covariate
+        if (isTRUE(input$include_batch) && length(unique(meta$Batch[meta$Batch != ""])) > 1) {
+          meta$Batch <- make.names(meta$Batch)
+          covariates_to_include <- c(covariates_to_include, "batch")
+          covariate_messages <- c(covariate_messages, "Batch")
+        }
+
+        if (isTRUE(input$include_cov1) && length(unique(meta$Covariate1[meta$Covariate1 != ""])) > 1) {
+          meta$Covariate1 <- make.names(meta$Covariate1)
+          cov1_var <- tolower(gsub(" ", "_", values$cov1_name %||% "covariate1"))
+          covariates_to_include <- c(covariates_to_include, cov1_var)
+          covariate_messages <- c(covariate_messages, values$cov1_name %||% "Covariate1")
+        }
+
+        if (isTRUE(input$include_cov2) && length(unique(meta$Covariate2[meta$Covariate2 != ""])) > 1) {
+          meta$Covariate2 <- make.names(meta$Covariate2)
+          cov2_var <- tolower(gsub(" ", "_", values$cov2_name %||% "covariate2"))
+          covariates_to_include <- c(covariates_to_include, cov2_var)
+          covariate_messages <- c(covariate_messages, values$cov2_name %||% "Covariate2")
+        }
+
+        # Build design matrix
+        if (length(covariates_to_include) > 0) {
+          # Create formula dynamically
+          formula_str <- paste0("~ 0 + groups + ", paste(covariates_to_include, collapse = " + "))
+
+          # Build data frame for design matrix
+          design_df <- data.frame(groups = groups)
+          if("batch" %in% covariates_to_include) design_df$batch <- factor(meta$Batch)
+          if(isTRUE(input$include_cov1) && length(unique(meta$Covariate1[meta$Covariate1 != ""])) > 1) {
+            cov1_var <- tolower(gsub(" ", "_", values$cov1_name %||% "covariate1"))
+            design_df[[cov1_var]] <- factor(meta$Covariate1)
+          }
+          if(isTRUE(input$include_cov2) && length(unique(meta$Covariate2[meta$Covariate2 != ""])) > 1) {
+            cov2_var <- tolower(gsub(" ", "_", values$cov2_name %||% "covariate2"))
+            design_df[[cov2_var]] <- factor(meta$Covariate2)
+          }
+
+          design <- model.matrix(as.formula(formula_str), data = design_df)
+          colnames(design) <- gsub("groups", "", colnames(design))
+
+          showNotification(
+            paste0("Including covariates: ", paste(covariate_messages, collapse = ", ")),
+            type = "message", duration = 5
+          )
+        } else {
+          # Standard design without covariates
+          design <- model.matrix(~ 0 + groups)
+          colnames(design) <- levels(groups)
+        }
+
+        combs <- combn(levels(groups), 2)
+        forms <- apply(combs, 2, function(x) paste(x[2], "-", x[1]))
+
+        fit <- limpa::dpcDE(values$y_protein, design, plot=FALSE)
+        fit <- contrasts.fit(fit, makeContrasts(contrasts=forms, levels=design))
+        fit <- eBayes(fit)
+        values$fit <- fit
+
+        updateSelectInput(session, "contrast_selector", choices=forms)
+        values$status <- "✅ Complete!"
+
+        # Log contrasts
+        contrast_code <- c(
+          sprintf("# Available contrasts: %s", paste(forms, collapse=", ")),
+          "combs <- combn(levels(groups), 2)",
+          "forms <- apply(combs, 2, function(x) paste(x[2], '-', x[1]))",
+          "fit <- contrasts.fit(fit, makeContrasts(contrasts=forms, levels=design))",
+          "fit <- eBayes(fit)"
+        )
+        add_to_log("Contrast Fitting", contrast_code)
+
+        nav_select("main_tabs", "QC Plots")
+        showNotification("✓ Pipeline complete! View results in tabs below.", type="message", duration=10)
+      }, error = function(e) {
+        showNotification(paste("Pipeline error:", e$message), type = "error", duration = NULL)
+      })
+    })
   })
 
   # ============================================================================
@@ -927,16 +1176,70 @@ server <- function(input, output, session) {
     datatable(summary_df, options = list(dom = 't', pageLength = 10), rownames = FALSE)
   })
   
-  output$qc_trend_plot <- renderPlotly({
+  # Helper function to generate QC trend plot
+  generate_qc_trend_plot <- reactive({
     req(values$qc_stats, input$qc_metric_select, values$metadata)
-    df <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>% mutate(Run_Number = as.numeric(str_extract(Run, "\\d+$")))
-    if (input$qc_sort_order == "Group") { df <- df %>% arrange(Group, Run_Number) } else { df <- df %>% arrange(Run_Number) }
-    df$Sort_Index <- factor(1:nrow(df), levels = 1:nrow(df)); metric <- input$qc_metric_select
-    df$Tooltip <- paste0("<b>File:</b> ", df$Run, "<br><b>Group:</b> ", df$Group, "<br><b>", metric, ":</b> ", round(df[[metric]], 2))
-    p <- ggplot(df, aes(x = Sort_Index, y = .data[[metric]], fill = Group, text = Tooltip)) + geom_bar(stat = "identity", width = 0.8) + theme_minimal() + labs(title = paste(metric, "per Run"), x = "Sample Index (Sorted)", y = metric) + theme(panel.grid.major.x = element_blank(), axis.text.x = element_text(size=8))
-    ggplotly(p, tooltip = "text") %>% config(displayModeBar = FALSE)
+    df <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>%
+      mutate(Run_Number = as.numeric(str_extract(Run, "\\d+$")))
+
+    if (input$qc_sort_order == "Group") {
+      df <- df %>% arrange(Group, Run_Number)
+    } else {
+      df <- df %>% arrange(Run_Number)
+    }
+
+    df$Sort_Index <- 1:nrow(df)
+    metric <- input$qc_metric_select
+    df$Tooltip <- paste0("<b>File:</b> ", df$Run, "<br><b>Group:</b> ", df$Group,
+                         "<br><b>", metric, ":</b> ", round(df[[metric]], 2))
+
+    # Calculate group means and ranges for average lines
+    group_stats <- df %>%
+      group_by(Group) %>%
+      summarise(
+        mean_value = mean(.data[[metric]], na.rm = TRUE),
+        x_min = min(Sort_Index),
+        x_max = max(Sort_Index),
+        .groups = 'drop'
+      )
+
+    # Create plot with bars and group average lines
+    p <- ggplot(df, aes(x = Sort_Index, y = .data[[metric]], fill = Group, text = Tooltip)) +
+      geom_bar(stat = "identity", width = 0.8) +
+      geom_segment(data = group_stats,
+                   aes(x = x_min - 0.5, xend = x_max + 0.5,
+                       y = mean_value, yend = mean_value,
+                       color = Group),
+                   linewidth = 1, linetype = "dashed", inherit.aes = FALSE,
+                   show.legend = FALSE) +
+      scale_color_discrete(guide = "none") +
+      theme_minimal() +
+      labs(title = paste(metric, "per Run (dashed lines = group averages)"),
+           x = "Sample Index (Sorted)", y = metric) +
+      theme(panel.grid.major.x = element_blank(), axis.text.x = element_text(size=8))
+
+    ggplotly(p, tooltip = "text") %>% config(displayModeBar = TRUE)
   })
-  
+
+  output$qc_trend_plot <- renderPlotly({
+    generate_qc_trend_plot()
+  })
+
+  # Fullscreen modal for QC trend plot
+  observeEvent(input$fullscreen_trend, {
+    showModal(modalDialog(
+      title = "QC Trend Analysis - Fullscreen View",
+      plotlyOutput("qc_trend_plot_fullscreen", height = "700px"),
+      size = "xl",
+      easyClose = TRUE,
+      footer = modalButton("Close")
+    ))
+  })
+
+  output$qc_trend_plot_fullscreen <- renderPlotly({
+    generate_qc_trend_plot()
+  })
+
   output$r_qc_table <- renderDT({ req(values$qc_stats); df_display <- values$qc_stats %>% arrange(Run) %>% mutate(ID = 1:n()) %>% dplyr::select(ID, Run, everything()); datatable(df_display, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE) })
   
   output$qc_group_violin <- renderPlotly({

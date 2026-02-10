@@ -57,6 +57,44 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
    - Provides proper citations for limpa, limma, and DIA-NN
    - Publication-ready text with clear section breaks and bullet points
 
+6. **Added Fullscreen View for QC Trend Plot** (lines 404, 937-977)
+   - Feature: "🔍 View Fullscreen" button in QC Trends tab
+   - Opens plot in a large modal dialog (700px height, extra-large width)
+   - Better for viewing on small monitors or detailed inspection
+   - Modal has interactive controls (zoom, pan, export via plotly toolbar)
+   - Click outside modal or "Close" button to dismiss
+
+7. **Added Group Average Lines to QC Trend Plot** (lines 937-977)
+   - Feature: Dashed horizontal lines showing average value for each group
+   - Lines span the full range of each group on the x-axis
+   - Color-matched to their respective groups for easy identification
+   - Helps quickly identify group-level trends and compare averages
+   - Works in both regular view and fullscreen modal
+
+8. **Streamlined Workflow: Run Pipeline from Assign Groups Modal** (lines 359-362, 649-780)
+   - Improvement: Removed standalone "Run Pipeline" button from sidebar
+   - "Assign Groups" button now labeled "Assign Groups & Run Pipeline"
+   - Modal footer has "▶ Run Pipeline" button instead of "Save & Close"
+   - Workflow: Upload data → Open modal → Assign groups → Click "Run Pipeline" (all in one flow)
+   - Validates groups (need 2+ groups) before running pipeline
+   - Automatically closes modal and navigates to QC Plots tab when complete
+   - More intuitive: users assign groups and immediately run analysis without extra steps
+
+9. **Added Customizable Multiple Covariate Support** (lines 563-920)
+   - Feature: Three covariate columns: Batch, Covariate1, Covariate2
+   - **Customizable names**: Text inputs let you rename Covariate1/2 to anything (e.g., "Sex", "Diet", "Age")
+   - Column headers update in real-time based on your custom names
+   - Individual checkboxes: Select which covariates to include in the model
+   - Design matrix: Dynamically builds formula using your custom names
+   - Formula examples:
+     - No covariates: `~ 0 + groups`
+     - One covariate: `~ 0 + groups + batch`
+     - Custom names: `~ 0 + groups + batch + sex + diet` (if you named them "Sex" and "Diet")
+   - Validation: Only includes covariates with >1 unique non-empty values
+   - Smart logging: Reproducibility log uses your custom covariate names
+   - Use cases: Batch effects, Sex, Age, Diet, Instrument, Time_Point, etc.
+   - Fully flexible: Name and use covariates for any categorical variable
+
 ### 2026-02-10: Fixed Package Installation for First-Time Users
 1. **Fixed Installation Conflicts** (lines 7-82)
    - Problem: Auto-installation tried to update already-loaded packages → ggplot2 unload errors
