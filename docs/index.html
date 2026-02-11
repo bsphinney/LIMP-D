@@ -6,279 +6,526 @@
     <title>DE-LIMP: Differential Expression &amp; Limpa Proteomics</title>
     <style>
         :root {
-            --primary: #2c5282;
+            --primary: #1e3a5f;
+            --primary-mid: #2c5282;
             --primary-light: #ebf4ff;
             --accent: #38a169;
-            --text: #2d3748;
+            --accent-hover: #2f855a;
+            --red: #e53e3e;
+            --orange: #dd6b20;
+            --text: #1a202c;
+            --text-mid: #4a5568;
             --text-light: #718096;
             --bg: #ffffff;
             --bg-alt: #f7fafc;
+            --bg-warm: #fffaf0;
             --border: #e2e8f0;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+            --shadow-lg: 0 10px 30px rgba(0,0,0,0.12);
+            --radius: 10px;
+            --radius-lg: 16px;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             color: var(--text);
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: var(--primary-mid); text-decoration: none; transition: color 0.2s; }
+        a:hover { color: var(--accent); }
+
+        /* ─── Top Navigation Bar ─── */
+        .topnav {
+            background: var(--primary);
+            color: rgba(255,255,255,0.85);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+        .topnav a {
+            color: rgba(255,255,255,0.9);
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: color 0.2s;
+        }
+        .topnav a:hover { color: #fff; }
+        .topnav svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+        /* ─── Hero ─── */
+        .hero {
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 50%, #2b6cb0 100%);
+            color: #fff;
+            padding: 4rem 1rem 3.5rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -25%;
+            width: 150%;
+            height: 200%;
+            background: radial-gradient(ellipse at 30% 50%, rgba(56,161,105,0.12) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .hero .container { position: relative; z-index: 1; }
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.35rem;
+        }
+        .hero .subtitle {
+            font-size: 1rem;
+            font-weight: 500;
+            opacity: 0.75;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 1rem;
+        }
+        .hero .tagline {
+            font-size: 1.2rem;
+            opacity: 0.92;
+            max-width: 640px;
+            margin: 0 auto 2rem;
             line-height: 1.6;
         }
-
-        a {
-            color: var(--primary);
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        /* Header */
-        .header {
-            background: linear-gradient(135deg, var(--primary), #1a365d);
-            color: #fff;
-            padding: 3rem 1rem;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .header .tagline {
-            font-size: 1.15rem;
-            opacity: 0.9;
-            max-width: 600px;
-            margin: 0 auto 1.5rem;
-        }
-
-        .header .btn-group {
+        .hero .btn-group {
             display: flex;
-            gap: 1rem;
+            gap: 0.75rem;
             justify-content: center;
             flex-wrap: wrap;
         }
 
         .btn {
-            display: inline-block;
-            padding: 0.65rem 1.5rem;
-            border-radius: 6px;
-            font-size: 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.7rem 1.6rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
             font-weight: 600;
-            transition: opacity 0.2s;
+            transition: transform 0.15s, box-shadow 0.15s;
+            border: none;
+            cursor: pointer;
         }
-
-        .btn:hover {
-            text-decoration: none;
-            opacity: 0.9;
-        }
-
-        .btn-primary {
-            background: var(--accent);
+        .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); text-decoration: none; }
+        .btn-accent { background: var(--accent); color: #fff; }
+        .btn-accent:hover { background: var(--accent-hover); color: #fff; }
+        .btn-outline {
+            background: rgba(255,255,255,0.1);
             color: #fff;
+            border: 1.5px solid rgba(255,255,255,0.35);
         }
+        .btn-outline:hover { background: rgba(255,255,255,0.2); color: #fff; }
+        .btn svg { width: 18px; height: 18px; }
 
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.15);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.4);
-        }
+        /* ─── Container ─── */
+        .container { max-width: 1020px; margin: 0 auto; padding: 0 1.5rem; }
 
-        /* Container */
-        .container {
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 0 1.5rem;
-        }
-
-        /* Sections */
-        section {
-            padding: 3rem 0;
-        }
-
-        section:nth-child(even) {
-            background: var(--bg-alt);
-        }
-
+        /* ─── Section ─── */
+        section { padding: 4rem 0; }
+        section.alt { background: var(--bg-alt); }
+        section.warm { background: var(--bg-warm); }
         section h2 {
-            font-size: 1.75rem;
-            margin-bottom: 1.5rem;
+            font-size: 1.85rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
             color: var(--primary);
         }
-
-        /* Feature grid */
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 1.5rem;
+        section .section-sub {
+            color: var(--text-light);
+            font-size: 1.05rem;
+            margin-bottom: 2rem;
+            max-width: 640px;
         }
 
+        /* ─── Resource Banner (YouTube / Core / News) ─── */
+        .resources {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        .resource-hero {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 320px;
+        }
+        .resource-hero .video-wrap {
+            position: relative;
+            background: #000;
+        }
+        .resource-hero .video-wrap iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .resource-hero .video-info {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .resource-hero .video-info .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: #fee2e2;
+            color: var(--red);
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.25rem 0.65rem;
+            border-radius: 20px;
+            width: fit-content;
+            margin-bottom: 0.75rem;
+        }
+        .resource-hero .video-info h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            line-height: 1.35;
+        }
+        .resource-hero .video-info p {
+            color: var(--text-light);
+            font-size: 0.95rem;
+            margin-bottom: 1.25rem;
+        }
+        .resource-hero .video-info .yt-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-weight: 600;
+            color: var(--red);
+            font-size: 0.95rem;
+        }
+        .resource-hero .video-info .yt-link:hover { text-decoration: underline; }
+
+        .resource-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+        .resource-card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.75rem;
+            box-shadow: var(--shadow-sm);
+            transition: box-shadow 0.2s, transform 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+        .resource-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        .resource-card .card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            flex-shrink: 0;
+        }
+        .resource-card .card-icon svg { width: 22px; height: 22px; }
+        .resource-card .card-icon.blue { background: var(--primary-light); color: var(--primary-mid); }
+        .resource-card .card-icon.orange { background: #feebc8; color: var(--orange); }
+        .resource-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.35rem; }
+        .resource-card p { color: var(--text-light); font-size: 0.9rem; margin-bottom: 1rem; flex-grow: 1; }
+        .resource-card .card-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        /* ─── Feature Grid ─── */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.25rem;
+        }
         .feature-card {
             background: var(--bg);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            transition: box-shadow 0.2s, transform 0.2s;
         }
-
-        .feature-card h3 {
-            font-size: 1.1rem;
-            margin-bottom: 0.5rem;
+        .feature-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        .feature-card .feat-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.6rem;
         }
+        .feature-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.35rem; }
+        .feature-card p { color: var(--text-light); font-size: 0.88rem; }
 
-        .feature-card p {
-            color: var(--text-light);
-            font-size: 0.95rem;
-        }
-
-        /* Install steps */
-        .steps {
-            counter-reset: step;
-            list-style: none;
-        }
-
+        /* ─── Steps ─── */
+        .steps { counter-reset: step; list-style: none; }
         .steps li {
             counter-increment: step;
             position: relative;
-            padding-left: 3rem;
-            margin-bottom: 1.5rem;
+            padding-left: 3.5rem;
+            margin-bottom: 2rem;
         }
-
         .steps li::before {
             content: counter(step);
             position: absolute;
-            left: 0;
-            top: 0;
-            width: 2rem;
-            height: 2rem;
-            background: var(--primary);
+            left: 0; top: 0;
+            width: 2.25rem; height: 2.25rem;
+            background: var(--primary-mid);
             color: #fff;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
-            font-size: 0.9rem;
+            font-weight: 800;
+            font-size: 0.85rem;
         }
-
-        .steps li h3 {
-            margin-bottom: 0.25rem;
-        }
-
-        .steps li p, .steps li pre {
-            color: var(--text-light);
-            font-size: 0.95rem;
-        }
+        .steps li h3 { font-size: 1.05rem; margin-bottom: 0.3rem; }
+        .steps li p { color: var(--text-mid); font-size: 0.95rem; }
 
         pre {
-            background: #1a202c;
+            background: #0f172a;
             color: #e2e8f0;
             padding: 1rem 1.25rem;
-            border-radius: 6px;
+            border-radius: 8px;
             overflow-x: auto;
             margin-top: 0.5rem;
-            font-size: 0.9rem;
-            line-height: 1.5;
+            font-size: 0.88rem;
+            line-height: 1.6;
         }
-
         code {
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        p code, li code {
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 0.15em 0.4em;
+            border-radius: 4px;
+            font-size: 0.88em;
         }
 
-        /* Requirements table */
-        .req-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-
+        /* ─── Requirements Table ─── */
+        .req-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
         .req-table th, .req-table td {
             text-align: left;
-            padding: 0.6rem 1rem;
+            padding: 0.75rem 1rem;
             border-bottom: 1px solid var(--border);
         }
-
         .req-table th {
             background: var(--primary-light);
-            font-weight: 600;
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--primary);
         }
+        .req-table td { font-size: 0.95rem; }
+        .req-table tr:hover td { background: #f0f5ff; }
 
-        /* Footer */
+        /* ─── Pipeline ─── */
+        .pipeline-intro { color: var(--text-mid); font-size: 1rem; margin-bottom: 2rem; }
+
+        /* ─── Footer ─── */
         .footer {
-            background: #1a202c;
-            color: #a0aec0;
-            text-align: center;
-            padding: 2rem 1rem;
-            font-size: 0.9rem;
+            background: var(--primary);
+            color: rgba(255,255,255,0.7);
+            padding: 2.5rem 1rem;
+            font-size: 0.88rem;
         }
-
-        .footer a {
-            color: #90cdf4;
+        .footer .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
         }
+        .footer a { color: rgba(255,255,255,0.9); }
+        .footer a:hover { color: #fff; }
+        .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 
-        /* Responsive */
-        @media (max-width: 600px) {
-            .header h1 {
-                font-size: 1.75rem;
-            }
-
-            .header .tagline {
-                font-size: 1rem;
-            }
-
-            section {
-                padding: 2rem 0;
-            }
+        /* ─── Responsive ─── */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.2rem; }
+            .hero .tagline { font-size: 1.05rem; }
+            .features { grid-template-columns: 1fr; }
+            .resource-hero { grid-template-columns: 1fr; }
+            .resource-hero .video-wrap { min-height: 220px; }
+            .resource-cards { grid-template-columns: 1fr; }
+            .footer .container { flex-direction: column; text-align: center; }
+            .topnav { gap: 1rem; }
+        }
+        @media (min-width: 769px) and (max-width: 960px) {
+            .features { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
+    <!-- Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <!-- Header -->
-    <div class="header">
+    <!-- Top Nav Bar: External Resources -->
+    <nav class="topnav">
+        <a href="https://www.youtube.com/channel/UCpulhf8gl-HVxACyJUEFPRw" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 0 0 .5 6.19 31.7 31.7 0 0 0 0 12a31.7 31.7 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14A31.7 31.7 0 0 0 24 12a31.7 31.7 0 0 0-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>
+            YouTube Channel
+        </a>
+        <a href="https://proteomics.ucdavis.edu" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            UC Davis Proteomics Core
+        </a>
+        <a href="https://proteomicsnews.blogspot.com/" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><line x1="10" y1="8" x2="18" y2="8"/><line x1="10" y1="12" x2="18" y2="12"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+            Proteomics News
+        </a>
+        <a href="https://github.com/bsphinney/DE-LIMP" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 20.98c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6.02 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.37.81 1.1.81 2.22l-.01 3.29c0 .31.21.69.82.57A12 12 0 0 0 12 .3"/></svg>
+            GitHub
+        </a>
+    </nav>
+
+    <!-- Hero -->
+    <div class="hero">
         <div class="container">
+            <p class="subtitle">UC Davis Proteomics Core Facility</p>
             <h1>DE-LIMP</h1>
             <p class="tagline">
-                An interactive R Shiny application for differential expression analysis of DIA-NN proteomics data,
-                powered by Limpa and Limma.
+                An interactive R Shiny application for differential expression analysis of DIA-NN proteomics data, powered by Limpa and Limma.
             </p>
             <div class="btn-group">
-                <a href="https://github.com/bsphinney/DE-LIMP" class="btn btn-primary">View on GitHub</a>
-                <a href="https://github.com/bsphinney/DE-LIMP/releases" class="btn btn-secondary">Download Latest Release</a>
+                <a href="https://github.com/bsphinney/DE-LIMP" class="btn btn-accent" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 20.98c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6.02 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.37.81 1.1.81 2.22l-.01 3.29c0 .31.21.69.82.57A12 12 0 0 0 12 .3"/></svg>
+                    View on GitHub
+                </a>
+                <a href="https://github.com/bsphinney/DE-LIMP/releases" class="btn btn-outline" target="_blank" rel="noopener">Download Latest Release</a>
+                <a href="https://www.youtube.com/channel/UCpulhf8gl-HVxACyJUEFPRw" class="btn btn-outline" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 0 0 .5 6.19 31.7 31.7 0 0 0 0 12a31.7 31.7 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14A31.7 31.7 0 0 0 24 12a31.7 31.7 0 0 0-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>
+                    Watch Tutorials
+                </a>
             </div>
         </div>
     </div>
 
-    <!-- Features -->
+    <!-- Proteomics Resources Section -->
+    <section class="warm">
+        <div class="container">
+            <h2>Proteomics Resources</h2>
+            <p class="section-sub">Video tutorials, core facility services, and the latest news in proteomics research.</p>
+            <div class="resources">
+
+                <!-- Featured YouTube Video -->
+                <div class="resource-hero">
+                    <div class="video-wrap">
+                        <iframe
+                            src="https://www.youtube.com/embed?listType=user_uploads&list=UCpulhf8gl-HVxACyJUEFPRw&max-results=1"
+                            title="Latest video from UC Davis Proteomics"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                            loading="lazy">
+                        </iframe>
+                    </div>
+                    <div class="video-info">
+                        <span class="badge">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 0 0 .5 6.19 31.7 31.7 0 0 0 0 12a31.7 31.7 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14A31.7 31.7 0 0 0 24 12a31.7 31.7 0 0 0-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>
+                            YouTube Channel
+                        </span>
+                        <h3>UC Davis Proteomics Video Tutorials</h3>
+                        <p>Data analysis walkthroughs, DIA-NN tutorials, Spectronaut guides, and proteomics short course lectures from the UC Davis Proteomics Core Facility.</p>
+                        <a href="https://www.youtube.com/channel/UCpulhf8gl-HVxACyJUEFPRw" class="yt-link" target="_blank" rel="noopener">
+                            Browse all videos
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Two smaller resource cards -->
+                <div class="resource-cards">
+                    <div class="resource-card">
+                        <div class="card-icon blue">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        </div>
+                        <h3>UC Davis Proteomics Core Facility</h3>
+                        <p>State-of-the-art mass spectrometry services including label-free quantitative profiling, DIA, post-translational modification analysis, amino acid analysis, and Edman sequencing. Serving researchers since 2005.</p>
+                        <a href="https://proteomics.ucdavis.edu" class="card-link" target="_blank" rel="noopener">
+                            proteomics.ucdavis.edu
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                        </a>
+                    </div>
+                    <div class="resource-card">
+                        <div class="card-icon orange">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><line x1="10" y1="8" x2="18" y2="8"/><line x1="10" y1="12" x2="18" y2="12"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+                        </div>
+                        <h3>Proteomics News</h3>
+                        <p>Stay current with the latest developments, publications, and breakthroughs in proteomics research. Curated news and commentary from the field.</p>
+                        <a href="https://proteomicsnews.blogspot.com/" class="card-link" target="_blank" rel="noopener">
+                            proteomicsnews.blogspot.com
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Key Features -->
     <section>
         <div class="container">
             <h2>Key Features</h2>
+            <p class="section-sub">Everything you need for interactive proteomics differential expression analysis.</p>
             <div class="features">
                 <div class="feature-card">
+                    <div class="feat-icon">&#x1F30B;</div>
                     <h3>Interactive Volcano Plots</h3>
                     <p>Fully interactive Plotly volcano plots. Click or box-select proteins to highlight them across all views.</p>
                 </div>
                 <div class="feature-card">
+                    <div class="feat-icon">&#x1F916;</div>
                     <h3>AI-Powered Analysis</h3>
                     <p>Chat with your data using Google Gemini. Ask biological questions and get context-aware answers with automatic protein highlighting.</p>
                 </div>
                 <div class="feature-card">
+                    <div class="feat-icon">&#x1F4C8;</div>
                     <h3>QC Trend Monitoring</h3>
-                    <p>Track precursor and protein counts across run order to identify batch effects and quality issues early.</p>
+                    <p>Track precursor and protein counts across run order to identify batch effects and quality issues.</p>
                 </div>
                 <div class="feature-card">
+                    <div class="feat-icon">&#x1F50D;</div>
                     <h3>Deep-Dive Grid View</h3>
                     <p>Heatmap-style expression grid with color-coded values, UniProt links, and click-to-plot violin charts.</p>
                 </div>
                 <div class="feature-card">
+                    <div class="feat-icon">&#x1F4DD;</div>
                     <h3>Reproducibility Log</h3>
-                    <p>Every analysis step is logged as executable R code with timestamps. Download a complete, runnable script of your session.</p>
+                    <p>Every analysis step is logged as executable R code with timestamps. Download a complete, runnable script.</p>
                 </div>
                 <div class="feature-card">
+                    <div class="feat-icon">&#x1F4BE;</div>
                     <h3>Save &amp; Load Sessions</h3>
                     <p>Save your entire analysis state as an RDS file and reload it later to continue exactly where you left off.</p>
                 </div>
@@ -287,14 +534,15 @@
     </section>
 
     <!-- Getting Started -->
-    <section>
+    <section class="alt">
         <div class="container">
             <h2>Getting Started</h2>
+            <p class="section-sub">Up and running in under five minutes.</p>
             <ol class="steps">
                 <li>
                     <h3>Install R 4.5+</h3>
                     <p>DE-LIMP requires R version 4.5 or newer for Bioconductor 3.22+ compatibility.
-                        Download from <a href="https://cloud.r-project.org/">cloud.r-project.org</a>.</p>
+                        Download from <a href="https://cloud.r-project.org/" target="_blank" rel="noopener">cloud.r-project.org</a>.</p>
                 </li>
                 <li>
                     <h3>Clone the repository</h3>
@@ -314,7 +562,7 @@ cd DE-LIMP</code></pre>
         </div>
     </section>
 
-    <!-- Requirements -->
+    <!-- System Requirements -->
     <section>
         <div class="container">
             <h2>System Requirements</h2>
@@ -327,41 +575,21 @@ cd DE-LIMP</code></pre>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>R</td>
-                        <td>4.5+</td>
-                        <td>Required for Bioconductor 3.22+</td>
-                    </tr>
-                    <tr>
-                        <td>Bioconductor</td>
-                        <td>3.22+</td>
-                        <td>Automatically configured with R 4.5</td>
-                    </tr>
-                    <tr>
-                        <td>limpa</td>
-                        <td>Latest</td>
-                        <td>Core analysis engine (auto-installed)</td>
-                    </tr>
-                    <tr>
-                        <td>limma</td>
-                        <td>Latest</td>
-                        <td>Statistical framework (auto-installed)</td>
-                    </tr>
-                    <tr>
-                        <td>Shiny</td>
-                        <td>Latest</td>
-                        <td>Web framework (auto-installed)</td>
-                    </tr>
+                    <tr><td>R</td><td>4.5+</td><td>Required for Bioconductor 3.22+</td></tr>
+                    <tr><td>Bioconductor</td><td>3.22+</td><td>Automatically configured with R 4.5</td></tr>
+                    <tr><td>limpa</td><td>Latest</td><td>Core analysis engine (auto-installed)</td></tr>
+                    <tr><td>limma</td><td>Latest</td><td>Statistical framework (auto-installed)</td></tr>
+                    <tr><td>Shiny</td><td>Latest</td><td>Web framework (auto-installed)</td></tr>
                 </tbody>
             </table>
         </div>
     </section>
 
     <!-- Analysis Pipeline -->
-    <section>
+    <section class="alt">
         <div class="container">
             <h2>Analysis Pipeline</h2>
-            <p>DE-LIMP uses the LIMPA package to run a well-established proteomics analysis workflow:</p>
+            <p class="pipeline-intro">DE-LIMP uses the LIMPA package to run a well-established proteomics analysis workflow:</p>
             <ol class="steps">
                 <li>
                     <h3>Data Import</h3>
@@ -386,16 +614,19 @@ cd DE-LIMP</code></pre>
     <!-- Footer -->
     <div class="footer">
         <div class="container">
-            <p>
-                DE-LIMP is open source.
-                <a href="https://github.com/bsphinney/DE-LIMP">GitHub Repository</a> &middot;
-                <a href="https://github.com/bsphinney/DE-LIMP/issues">Report an Issue</a>
-            </p>
-            <p style="margin-top: 0.5rem;">
-                Built with <a href="https://shiny.posit.co/">Shiny</a>,
-                <a href="https://bioconductor.org/packages/limpa/">limpa</a>, and
-                <a href="https://bioconductor.org/packages/limma/">limma</a>.
-            </p>
+            <div>
+                <strong style="color:#fff;">DE-LIMP</strong> &mdash; Open-source proteomics analysis.<br>
+                Built with <a href="https://shiny.posit.co/" target="_blank" rel="noopener">Shiny</a>,
+                <a href="https://bioconductor.org/packages/limpa/" target="_blank" rel="noopener">limpa</a>, and
+                <a href="https://bioconductor.org/packages/limma/" target="_blank" rel="noopener">limma</a>.
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/bsphinney/DE-LIMP" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/bsphinney/DE-LIMP/issues" target="_blank" rel="noopener">Report an Issue</a>
+                <a href="https://www.youtube.com/channel/UCpulhf8gl-HVxACyJUEFPRw" target="_blank" rel="noopener">YouTube</a>
+                <a href="https://proteomics.ucdavis.edu" target="_blank" rel="noopener">Core Facility</a>
+                <a href="https://proteomicsnews.blogspot.com/" target="_blank" rel="noopener">Proteomics News</a>
+            </div>
         </div>
     </div>
 
