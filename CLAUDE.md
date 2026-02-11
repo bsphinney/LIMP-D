@@ -21,7 +21,7 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 **Note**: The app will automatically detect if R version is too old and provide upgrade instructions.
 
 ## Key Files
-- **DE-LIMP.r** - Main Shiny app (~1200 lines)
+- **DE-LIMP.R** - Main Shiny app (1715 lines)
 - **Main URL**: http://localhost:3838 when running
 
 ## Recent Changes & Important Fixes
@@ -291,6 +291,16 @@ summarise(
 9. **Selections disappear after clicking**:
    - Reactive loop! Table re-renders on selection changes
    - Solution: Make table build data independently without reactive dependencies on selection state
+
+### Git/Version Control Issues
+10. **GitHub shows old/wrong version despite local file being correct**:
+   - Problem: Local file (1715 lines) correct, but GitHub shows old version (459 lines)
+   - Root cause: Modified file was NOT staged/committed to git (`git status` shows "Changes not staged")
+   - Symptoms: `git diff HEAD origin/main` shows no difference, but GitHub is wrong
+   - How to check: `git show HEAD:DE-LIMP.R | wc -l` to see what's actually in the git commit
+   - Solution: `git add DE-LIMP.R && git commit -m "message" && git push origin main`
+   - **Key lesson**: Always check `git status` and commit working files before assuming they're in the repo
+   - Fixed in commit b2fbf11 (2026-02-10)
 
 ## AI Chat Feature
 - Uses Google Gemini API
