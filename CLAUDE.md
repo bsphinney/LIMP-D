@@ -312,3 +312,6 @@ summarise(
 - [x] Add download button for reproducibility log ✅ (2026-02-10)
 - [ ] Consider adding plot theme customization
 - [ ] Add option to save/load analysis sessions (RDS)
+- [ ] Volcano plot: Indicate how significance is being defined (e.g., "FDR < 0.05" annotation)
+- [ ] GSEA: Add KEGG and Reactome enrichment to the pathway analysis functionality
+- [ ] GSEA: Clarify which DE results (contrast) the GSEA analysis is being performed for
