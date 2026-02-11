@@ -24,9 +24,21 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 
 ## Key Files
 - **DE-LIMP.R** - Main Shiny app (1715 lines)
+- **docs/index.html** - GitHub Pages landing page (project website)
 - **Main URL**: http://localhost:3838 when running
+- **GitHub Pages URL**: https://bsphinney.github.io/DE-LIMP/ (once enabled)
 
 ## Recent Changes & Important Fixes
+
+### 2026-02-11: Set Up GitHub Pages Site
+1. **Created GitHub Pages landing page** (`docs/index.html`)
+   - Professional single-page site for the DE-LIMP project
+   - Located in `/docs` directory (configure GitHub Pages to serve from `main` branch `/docs` folder)
+   - Includes: project overview, feature highlights, installation instructions, workflow description
+   - Contains a curated **proteomics resources** section with links to tools, databases, and learning materials
+   - Responsive design with clean CSS (no external dependencies)
+   - **To enable**: Go to GitHub repo Settings → Pages → Source: "Deploy from a branch" → Branch: `main`, folder: `/docs`
+   - **GitHub Pages URL**: `https://bsphinney.github.io/DE-LIMP/` (once enabled)
 
 ### 2026-02-11: Added Save/Load Session Feature
 1. **Save/Load Analysis Sessions as RDS** (sidebar UI + server handlers)
@@ -330,3 +342,5 @@ summarise(
 - [ ] GSEA: Add KEGG and Reactome enrichment to the pathway analysis functionality
 - [ ] GSEA: Clarify which DE results (contrast) the GSEA analysis is being performed for
 - [ ] Documentation: Re-write README.md and USER_GUIDE.md to incorporate new features and workflows
+- [x] Set up GitHub Pages site with project landing page ✅ (2026-02-11)
+- [ ] GitHub Pages: Enable in repo settings (Settings → Pages → main branch, /docs folder)
