@@ -353,6 +353,8 @@ ui <- page_sidebar(
     
     h5("1. Upload"),
     fileInput("report_file", "DIA-NN Report (.parquet)", accept = c(".parquet")),
+    actionButton("load_example", "📊 Load Example Data", class = "btn-info btn-sm w-100",
+                 style = "margin-bottom: 10px;"),
     numericInput("q_cutoff", "Q-Value Cutoff", value = 0.01, min = 0, max = 0.1, step = 0.01),
     hr(),
     h5("2. Setup"),
@@ -557,6 +559,55 @@ server <- function(input, output, session) {
   # ============================================================================
   #      2. Main Data Loading & Processing Pipeline
   # ============================================================================
+
+  # Load example data from GitHub releases
+  observeEvent(input$load_example, {
+    withProgress(message = "Downloading example data...", {
+      example_url <- "https://github.com/bsphinney/DE-LIMP/releases/download/v1.0/Affinisep_vs_evosep_noNorm.parquet"
+      temp_file <- tempfile(fileext = ".parquet")
+
+      tryCatch({
+        incProgress(0.3, detail = "Downloading from GitHub...")
+        download.file(example_url, temp_file, mode = "wb", quiet = TRUE)
+
+        incProgress(0.5, detail = "Calculating Trends...")
+        values$qc_stats <- get_diann_stats_r(temp_file)
+
+        incProgress(0.7, detail = "Reading Matrix...")
+        values$raw_data <- limpa::readDIANN(temp_file, format="parquet", q.cutoffs=input$q_cutoff)
+        fnames <- sort(colnames(values$raw_data$E))
+        values$metadata <- data.frame(
+          ID = 1:length(fnames),
+          File.Name = fnames,
+          Group = rep("", length(fnames)),
+          Batch = rep("", length(fnames)),
+          Covariate1 = rep("", length(fnames)),
+          Covariate2 = rep("", length(fnames)),
+          stringsAsFactors=FALSE
+        )
+
+        # Initialize custom covariate names
+        if(is.null(values$cov1_name)) values$cov1_name <- "Covariate1"
+        if(is.null(values$cov2_name)) values$cov2_name <- "Covariate2"
+
+        incProgress(0.9, detail = "Opening setup...")
+
+        # Log to reproducibility
+        add_to_log("Example Data Loaded", c(
+          "# Example data: Affinisep vs Evosep (50ng Thermo Hela digest)",
+          sprintf("# Downloaded from: %s", example_url),
+          sprintf("dat <- readDIANN('Affinisep_vs_evosep_noNorm.parquet', format='parquet', q.cutoffs=%s)", input$q_cutoff)
+        ))
+
+        showNotification("Example data loaded successfully!", type = "message", duration = 3)
+        click("open_setup")
+
+      }, error = function(e) {
+        showNotification(paste("Error loading example data:", e$message), type = "error", duration = 10)
+      })
+    })
+  })
+
   observeEvent(input$report_file, {
     req(input$report_file)
     withProgress(message = "Loading...", {
