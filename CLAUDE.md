@@ -23,10 +23,167 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 **Note**: The app will automatically detect if R version is too old and provide upgrade instructions.
 
 ## Key Files
-- **DE-LIMP.R** - Main Shiny app (1715 lines)
-- **Main URL**: http://localhost:3838 when running
+- **DE-LIMP.R** - Main Shiny app (1923 lines) - For GitHub releases and local users
+- **app.R** - Copy of DE-LIMP.R for Hugging Face Spaces (HF requires this naming)
+- **README.md** - Full documentation for GitHub
+- **README_HF.md** - Hugging Face version with YAML frontmatter (source for HF's README.md)
+- **Main URL**: http://localhost:3838 when running locally
+
+## Deployment & Release Management
+
+### Dual Remote Setup
+This project is deployed to **two platforms** with separate git remotes:
+- **`origin`** → GitHub (https://github.com/bsphinney/DE-LIMP)
+- **`hf`** → Hugging Face Spaces (https://huggingface.co/spaces/brettsp/de-limp-proteomics)
+
+**IMPORTANT**: Changes to GitHub do NOT automatically sync to Hugging Face. You must push to both remotes manually.
+
+### When to Update Each Platform
+
+#### For Code Changes (app.R):
+```bash
+# Make your changes to app.R
+git add app.R
+git commit -m "Description of changes"
+
+# Push to BOTH remotes
+git push origin main && git push hf main
+```
+
+#### For GitHub-Only Changes (DE-LIMP.R, full README.md):
+```bash
+# Changes to DE-LIMP.R or documentation
+git add DE-LIMP.R README.md
+git commit -m "Description"
+
+# Push to GitHub only
+git push origin main
+```
+
+#### For Hugging Face-Only Changes (Dockerfile, README YAML):
+```bash
+# Make changes to Dockerfile or README_HF.md
+git add Dockerfile
+git commit -m "Description"
+
+# Push to HF only
+git push hf main
+```
+
+### Key Differences Between Platforms
+
+| File | GitHub | Hugging Face | Notes |
+|------|--------|--------------|-------|
+| Main app | `DE-LIMP.R` | `app.R` | HF requires `app.R` naming |
+| README | Full documentation (no YAML) | YAML frontmatter required | HF needs config metadata |
+| Deployment | Manual download | Docker container | HF auto-builds from Dockerfile |
+
+### Release Checklist (for Major Versions)
+
+When creating a new release (e.g., v2.0):
+
+1. **Update Documentation**:
+   - [ ] Update `CLAUDE.md` with new features/fixes
+   - [ ] Update `USER_GUIDE.md` with new workflows
+   - [ ] Update `README.md` with feature highlights
+   - [ ] Update `README_HF.md` if HF deployment changes
+
+2. **Sync Code**:
+   - [ ] Ensure `app.R` and `DE-LIMP.R` are identical (or copy: `cp app.R DE-LIMP.R`)
+   - [ ] Test app locally: `shiny::runApp('DE-LIMP.R', port=3838, launch.browser=TRUE)`
+
+3. **Commit & Tag**:
+   ```bash
+   git add .
+   git commit -m "Release vX.X: Description"
+   git tag -a vX.X -m "Version X.X release"
+   git push origin main
+   git push origin vX.X
+   ```
+
+4. **Update Hugging Face**:
+   ```bash
+   # Push code changes to HF
+   git push hf main
+
+   # Update HF README with YAML if needed
+   cp README_HF.md README.md
+   git add README.md
+   git commit -m "Update HF README with YAML frontmatter"
+   git push hf main
+
+   # Restore GitHub README
+   git checkout HEAD~1 README.md  # or use README_GITHUB.md backup
+   git add README.md
+   git commit -m "Restore GitHub README"
+   git push origin main
+   ```
+
+5. **Create GitHub Release**:
+   - [ ] Go to https://github.com/bsphinney/DE-LIMP/releases/new
+   - [ ] Select tag vX.X
+   - [ ] Write comprehensive release notes (features, fixes, requirements, links)
+   - [ ] Attach `DE-LIMP.R` file for download
+   - [ ] Link to Hugging Face Space in release notes
+   - [ ] Publish release
+
+6. **Verify Deployments**:
+   - [ ] GitHub release page shows correctly
+   - [ ] Hugging Face Space builds successfully (check Logs tab)
+   - [ ] Test both local download and HF web version
+
+### Quick Commands Reference
+
+```bash
+# Check which remote you're on
+git remote -v
+
+# Push to both remotes at once (for code changes)
+git push origin main && git push hf main
+
+# Check Hugging Face build status (in browser)
+# Visit: https://huggingface.co/spaces/brettsp/de-limp-proteomics/logs
+
+# Test local version
+shiny::runApp('DE-LIMP.R', port=3838, launch.browser=TRUE)
+```
 
 ## Recent Changes & Important Fixes
+
+### 2026-02-11: v2.0 Release Preparation
+1. **Updated USER_GUIDE.md for v2.0**
+   - Updated prerequisites to R 4.5+ requirement
+   - Added Load Example Data section (Option A vs Option B)
+   - Documented streamlined "Assign Groups & Run Pipeline" workflow
+   - Added customizable covariate support section
+   - Added QC enhancements (group averages, fullscreen view)
+   - Added Reproducibility & Code Export section
+   - Added Education & Resources section
+   - Added Save & Load Analysis Sessions section
+   - Updated volcano plot section (raw p-values vs FDR)
+   - Added multi-protein violin plot details
+   - Added "Accessing DE-LIMP" section with Hugging Face link
+   - Enhanced troubleshooting with 10 updated entries
+
+2. **Created Comprehensive v2.0 Release**
+   - Tagged v2.0 in git
+   - Created GitHub release with detailed notes (12+ features)
+   - Included system requirements and quick start
+   - Links to Hugging Face Space, GitHub Pages, documentation
+   - Attached DE-LIMP.R for local download
+
+3. **Fixed Hugging Face Deployment Issues**
+   - Fixed README.md configuration error (missing YAML frontmatter)
+   - Separated README.md for GitHub vs Hugging Face
+   - HF now has README with proper YAML metadata
+   - GitHub keeps full documentation README
+   - Both remotes working correctly
+
+4. **File Management for Dual Deployment**
+   - Created `DE-LIMP.R` for GitHub releases (copied from app.R)
+   - `app.R` used exclusively for Hugging Face
+   - Both files identical in content, different in purpose/location
+   - Added to git on GitHub only (not pushed to HF)
 
 ### 2026-02-11: Added Save/Load Session Feature
 1. **Save/Load Analysis Sessions as RDS** (sidebar UI + server handlers)
@@ -324,9 +481,10 @@ summarise(
 
 ## Next Steps / TODO
 - [x] Add download button for reproducibility log ✅ (2026-02-10)
-- [ ] Consider adding plot theme customization
 - [x] Add option to save/load analysis sessions (RDS) ✅ (2026-02-11)
-- [ ] Volcano plot: Indicate how significance is being defined (e.g., "FDR < 0.05" annotation)
+- [x] Documentation: Re-write README.md and USER_GUIDE.md to incorporate new features and workflows ✅ (2026-02-11, v2.0 release)
+- [ ] Consider adding plot theme customization
+- [ ] Volcano plot: Add annotation/legend indicating FDR threshold used for coloring
 - [ ] GSEA: Add KEGG and Reactome enrichment to the pathway analysis functionality
 - [ ] GSEA: Clarify which DE results (contrast) the GSEA analysis is being performed for
-- [ ] Documentation: Re-write README.md and USER_GUIDE.md to incorporate new features and workflows
+- [ ] Consider auto-pushing to both remotes with git hooks or GitHub Actions
