@@ -13,16 +13,22 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libtiff5-dev \
     libjpeg-dev \
+    libcairo2-dev \
+    libxt-dev \
     cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install R Dependencies (CRAN)
 RUN R -e "install.packages(c('bslib', 'readr', 'tibble', 'dplyr', 'tidyr', 'ggplot2', 'httr2', 'rhandsontable', 'DT', 'arrow', 'shinyjs', 'plotly', 'stringr', 'ggrepel', 'remotes', 'BiocManager', 'markdown'), repos='https://cloud.r-project.org/')"
 
+# 2b. Install graphics/font dependencies for clusterProfiler/enrichplot
+RUN R -e "install.packages(c('systemfonts', 'gdtools', 'Rcpp'), repos='https://cloud.r-project.org/')"
+
 # 3. Install Bioconductor Packages (Specific versions for stability)
 # Install in correct dependency order to avoid compilation issues
 RUN R -e "BiocManager::install(c('DOSE', 'GOSemSim', 'yulab.utils'), ask=FALSE, update=FALSE)"
 RUN R -e "BiocManager::install(c('limma', 'limpa', 'ComplexHeatmap', 'AnnotationDbi', 'org.Hs.eg.db', 'org.Mm.eg.db', 'ggridges'), ask=FALSE, update=FALSE)"
+RUN R -e "BiocManager::install(c('ggtree', 'ggtangle'), ask=FALSE, update=FALSE)"
 RUN R -e "BiocManager::install(c('clusterProfiler', 'enrichplot'), ask=FALSE, update=FALSE)"
 
 # 4. Copy the App Files into the image
