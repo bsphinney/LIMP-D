@@ -34,6 +34,7 @@
 - **Save/Load Sessions** - Preserve entire analysis state as .rds files
 - **Reproducibility Logging** - Export complete R code for analysis reproduction
 - **Example Data** - One-click download of demo dataset (Affinisep vs Evosep comparison)
+- **Group Assignment Templates** - Export/import group configurations as CSV for reproducible workflows
 
 ### 🔬 Advanced Features
 - **Multiple Covariates** - Customize covariate names (Batch, Sex, Diet, etc.) and include in models
@@ -112,7 +113,7 @@ httr2, curl
 ### 3. Explore Results
 - **Data Overview** - Signal distributions and QC summaries
 - **QC Trends** - Temporal trends with group averages
-- **DE Dashboard** - Volcano plots and interactive tables
+- **DE Dashboard** - Volcano plots and interactive tables (current comparison shown prominently)
 - **Consistent DE** - High-reproducibility proteins
 - **GSEA** - Gene Ontology enrichment
 - **Data Chat** - AI-powered exploration
