@@ -75,7 +75,7 @@ We now use SOURCE FILES for README management (as of 2026-02-11):
   git commit -m "Update docs"
   git push origin main && git push hf main
 
-Recovery count: 8 incidents (as of 2026-02-11). Use source files and specific file names!
+Recovery count: 9 incidents (as of 2026-02-12). Use source files and specific file names!
 ```
 
 ## Project Overview
@@ -464,7 +464,8 @@ git push hf main  # OK if no README in recent commits
 - v2.0.1 documentation update: 2 times (incidents #5 and #6)
 - v2.0.1 Dockerfile fix: 1 time (incident #7)
 - v2.0.1 CLAUDE.md update: 1 time (incident #8)
-- **Total: 8 times** (as of 2026-02-11)
+- v2.0.1 Dockerfile fix #2: 1 time (incident #9 - enrichplot dependencies)
+- **Total: 9 times** (as of 2026-02-12)
 
 **Incident #6 Root Cause:**
 Even though we only pushed CLAUDE.md changes, git pushed the entire commit history including the previous "Restore GitHub README" commit, which overwrote HF's YAML README.
