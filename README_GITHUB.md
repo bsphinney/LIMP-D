@@ -51,6 +51,33 @@
 
 ---
 
+## 🚀 Deployment & Access
+
+**DE-LIMP is available in three ways:**
+
+### 🌐 Web Access (No Installation Required)
+**Try it now:** [huggingface.co/spaces/brettsp/de-limp-proteomics](https://huggingface.co/spaces/brettsp/de-limp-proteomics)
+- Run directly in your browser
+- No R installation needed
+- Perfect for quick analyses and exploring features
+- Note: Limited computational resources compared to local installation
+
+### 💻 Local Installation (Recommended for Regular Use)
+- Full computational power of your machine
+- Better for large datasets and multiple analyses
+- See Installation section below for setup instructions
+- Download from: [GitHub Releases](https://github.com/bsphinney/DE-LIMP/releases)
+
+### 🖥️ HPC Deployment (High-Performance Computing)
+- Deploy on cluster environments (SLURM, PBS, etc.)
+- Use Apptainer/Singularity containers
+- Three deployment options including direct pull from Hugging Face
+- Full guide: [HPC_DEPLOYMENT.md](HPC_DEPLOYMENT.md)
+
+> **Note for Developers:** This repository is deployed to both GitHub (source code + releases) and Hugging Face Spaces (web deployment). The repositories track the same codebase but have different README.md files due to platform requirements.
+
+---
+
 ## 🛠 Installation
 
 ### System Requirements
