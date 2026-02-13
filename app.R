@@ -423,9 +423,67 @@ ui <- page_sidebar(
     ),
     
     nav_panel("QC Plots", icon = icon("chart-line"),
-              layout_columns(col_widths=c(6,6), 
+              layout_columns(col_widths=c(6,6),
                              card(card_header("DPC Fit"), plotOutput("dpc_plot", height="400px")),
                              card(card_header("MDS Plot"), plotOutput("mds_plot", height="400px"))),
+              # --- Pipeline Diagnostic: Input → Output Distributions ---
+              layout_columns(col_widths = c(12),
+                card(
+                  card_header(
+                    div(style = "display: flex; justify-content: space-between; align-items: center;",
+                      span("Pipeline Diagnostic: Input \u2192 Output Distributions"),
+                      div(
+                        uiOutput("diann_norm_status_badge", inline = TRUE),
+                        actionButton("fullscreen_norm_diag", "\U0001F50D View Fullscreen", class = "btn-info btn-sm")
+                      )
+                    )
+                  ),
+                  card_body(
+                    uiOutput("norm_diag_guidance"),
+                    radioButtons("norm_diag_type", "View:",
+                      choices = c("Box Plots" = "boxplot", "Density Overlay" = "density"),
+                      inline = TRUE
+                    ),
+                    plotlyOutput("norm_diagnostic_plot", height = "450px"),
+                    tags$details(
+                      tags$summary(style = "cursor: pointer; color: #0d6efd; font-size: 0.9em; margin-top: 10px;",
+                        icon("question-circle"), " What am I looking at?"
+                      ),
+                      div(style = "background-color: #f8f9fa; padding: 12px; border-radius: 5px;
+                                   margin-top: 8px; font-size: 0.85em; line-height: 1.6;",
+                        tags$h6("Reading this plot"),
+                        p("Each box (or density curve) represents one sample's intensity distribution \u2014 ",
+                          "essentially, how bright all the detected peptides/proteins are in that sample."),
+                        p(strong("Left panel: "), "What DIA-NN gave us. These are the peptide-level intensities ",
+                          "after DIA-NN's normalization (if it was enabled). ",
+                          strong("Right panel: "), "What our pipeline produced. These are the final protein-level ",
+                          "estimates after aggregating peptides and handling missing values."),
+                        tags$h6("What 'good' looks like"),
+                        p("The boxes (or curves) should sit at roughly the same height across all samples. ",
+                          "Small differences are normal. If one sample is dramatically higher or lower than ",
+                          "the rest, that sample may be problematic."),
+                        tags$h6("What 'bad' looks like"),
+                        p("If all the boxes are at very different heights, your samples aren't comparable ",
+                          "and the statistical results may not be reliable. The most common cause is that ",
+                          "DIA-NN normalization was turned off when the data was processed."),
+                        tags$h6("Why doesn't the right panel 'fix' bad data?"),
+                        p("Unlike some other tools, this pipeline does not apply its own normalization. ",
+                          "The protein quantification step (DPC-Quant) aggregates peptides into proteins and ",
+                          "handles missing values, but it ",
+                          strong("trusts the input intensities as-is"), ". ",
+                          "If the input is unnormalized, the output will be too. ",
+                          "Normalization happens in DIA-NN, before the data reaches this tool."),
+                        tags$h6("The DIA-NN normalization badge"),
+                        p("The badge at the top of this plot tells you whether DIA-NN applied normalization ",
+                          "to your data. ",
+                          tags$span(class = "badge bg-info", "ON"), " = DIA-NN's RT-dependent normalization was active (recommended). ",
+                          tags$span(class = "badge bg-warning", "OFF"), " = Data was exported without normalization. ",
+                          tags$span(class = "badge bg-secondary", "Unknown"), " = Couldn't determine (older DIA-NN version or non-standard export).")
+                      )
+                    )
+                  )
+                )
+              ),
               layout_columns(col_widths=c(12),
                              card(
                                card_header("Group QC Distribution (Hover for Info)"),
@@ -565,7 +623,8 @@ server <- function(input, output, session) {
     ),
     color_plot_by_de = FALSE,
     grid_selected_protein = NULL,
-    temp_violin_target = NULL # Added for violin popup
+    temp_violin_target = NULL, # Added for violin popup
+    diann_norm_detected = "unknown" # "on", "off", or "unknown" — DIA-NN normalization status
   )
 
   # Helper function to append to reproducibility log
@@ -615,6 +674,19 @@ server <- function(input, output, session) {
         # Flag this as example data for auto-guess logic
         values$is_example_data <- TRUE
 
+        # Detect DIA-NN normalization status
+        values$diann_norm_detected <- tryCatch({
+          raw_parquet <- arrow::read_parquet(temp_file,
+            col_select = c("Precursor.Quantity", "Precursor.Normalised"))
+          has_both_cols <- all(c("Precursor.Quantity", "Precursor.Normalised") %in% names(raw_parquet))
+          if (has_both_cols) {
+            sample_rows <- head(raw_parquet, 1000)
+            ratio <- sample_rows$Precursor.Normalised / sample_rows$Precursor.Quantity
+            ratios_vary <- sd(ratio, na.rm = TRUE) > 0.001
+            if (ratios_vary) "on" else "off"
+          } else { "unknown" }
+        }, error = function(e) "unknown")
+
         incProgress(0.9, detail = "Opening setup...")
 
         # Log to reproducibility
@@ -656,7 +728,21 @@ server <- function(input, output, session) {
         if(is.null(values$cov2_name)) values$cov2_name <- "Covariate2"
         # Clear example data flag for user uploads
         values$is_example_data <- FALSE
-        click("open_setup") 
+
+        # Detect DIA-NN normalization status
+        values$diann_norm_detected <- tryCatch({
+          raw_parquet <- arrow::read_parquet(input$report_file$datapath,
+            col_select = c("Precursor.Quantity", "Precursor.Normalised"))
+          has_both_cols <- all(c("Precursor.Quantity", "Precursor.Normalised") %in% names(raw_parquet))
+          if (has_both_cols) {
+            sample_rows <- head(raw_parquet, 1000)
+            ratio <- sample_rows$Precursor.Normalised / sample_rows$Precursor.Quantity
+            ratios_vary <- sd(ratio, na.rm = TRUE) > 0.001
+            if (ratios_vary) "on" else "off"
+          } else { "unknown" }
+        }, error = function(e) "unknown")
+
+        click("open_setup")
       }, error=function(e) { showNotification(paste("Error:", e$message), type="error") })
     })
   })
@@ -1368,6 +1454,242 @@ server <- function(input, output, session) {
     meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]; grps <- factor(meta$Group); cols <- rainbow(length(levels(grps)))
     par(xpd = TRUE); limpa::plotMDSUsingSEs(values$y_protein, pch=16, main="MDS Plot", col=cols[grps]); legend(x = "right", inset = c(-0.2, 0), legend=levels(grps), col=cols, pch=16, bty = "n")
   }, height = 400) # FIXED HEIGHT
+
+  # ============================================================================
+  #      Pipeline Diagnostic: Input → Output Distributions
+  # ============================================================================
+
+  # DIA-NN normalization status badge
+  output$diann_norm_status_badge <- renderUI({
+    status <- values$diann_norm_detected
+    if (status == "on") {
+      span(class = "badge bg-info", style = "margin-right: 10px;",
+        icon("check-circle"), " DIA-NN normalization: ON (RT-dependent)")
+    } else if (status == "off") {
+      span(class = "badge bg-warning", style = "margin-right: 10px;",
+        icon("exclamation-triangle"), " DIA-NN normalization: OFF")
+    } else {
+      span(class = "badge bg-secondary", style = "margin-right: 10px;",
+        icon("question-circle"), " DIA-NN normalization: unknown")
+    }
+  })
+
+  # Health assessment reactive
+  assess_distribution_health <- reactive({
+    req(values$raw_data, values$y_protein)
+    pre_mat <- values$raw_data$E
+    post_mat <- values$y_protein$E
+    pre_medians <- apply(pre_mat, 2, median, na.rm = TRUE)
+    post_medians <- apply(post_mat, 2, median, na.rm = TRUE)
+    pre_cv <- sd(pre_medians) / abs(mean(pre_medians))
+    post_cv <- sd(post_medians) / abs(mean(post_medians))
+    pre_outliers <- which(abs(pre_medians - mean(pre_medians)) > 2 * sd(pre_medians))
+    post_outliers <- which(abs(post_medians - mean(post_medians)) > 2 * sd(post_medians))
+    list(
+      pre_cv = pre_cv, post_cv = post_cv,
+      pre_outlier_samples = names(pre_outliers),
+      post_outlier_samples = names(post_outliers),
+      status = if (pre_cv > 0.05) "warning" else if (length(pre_outliers) > 0) "caution" else "good"
+    )
+  })
+
+  # Contextual guidance banners
+  output$norm_diag_guidance <- renderUI({
+    req(values$raw_data, values$y_protein)
+    health <- assess_distribution_health()
+    diann_status <- values$diann_norm_detected
+    warnings <- list()
+
+    # SCENARIO 1: DIA-NN normalization OFF + bad distributions
+    if (diann_status == "off" && health$status == "warning") {
+      warnings <- c(warnings, list(
+        div(class = "alert alert-warning", role = "alert",
+          icon("exclamation-triangle"),
+          strong(" Unnormalized data detected. "),
+          "Your DIA-NN output does not appear to be normalized (the ",
+          tags$code("Precursor.Normalised"), " and ", tags$code("Precursor.Quantity"),
+          " columns are identical). The sample distributions look uneven, which can lead ",
+          "to unreliable differential expression results.",
+          br(), br(),
+          strong("What to do: "),
+          "For most experiments, re-process your data in DIA-NN with ",
+          tags$b("RT-dependent normalization"), " enabled (this is the default setting). ",
+          "This corrects for differences in sample loading and LC-MS run variability.",
+          br(), br(),
+          em("Exception: "), "If you are analyzing AP-MS/Co-IP, fractionated samples, or ",
+          "isotope labeling time-courses, unnormalized data may be appropriate \u2014 ",
+          "but you should apply your own normalization before using DE-LIMP."
+        )
+      ))
+    }
+
+    # SCENARIO 2: DIA-NN normalization OFF but distributions look OK
+    if (diann_status == "off" && health$status == "good") {
+      warnings <- c(warnings, list(
+        div(class = "alert alert-info", role = "alert",
+          icon("info-circle"),
+          strong(" DIA-NN normalization was off, "),
+          "but your sample distributions look reasonably aligned. This can happen if your ",
+          "samples had very consistent loading and LC-MS performance. Results may still be ",
+          "valid, but consider whether normalization would improve your analysis."
+        )
+      ))
+    }
+
+    # SCENARIO 3: DIA-NN normalization ON but distributions still bad
+    if (diann_status == "on" && health$status == "warning") {
+      warnings <- c(warnings, list(
+        div(class = "alert alert-danger", role = "alert",
+          icon("times-circle"),
+          strong(" Sample distributions are uneven despite normalization. "),
+          "DIA-NN normalization was applied but the per-sample distributions still show ",
+          "substantial differences. This could indicate:",
+          tags$ul(
+            tags$li("A failed or low-quality injection (check the QC Trends tab)"),
+            tags$li("Very different sample types being compared (e.g., tissue vs plasma)"),
+            tags$li("Severe batch effects that normalization couldn't fully correct")
+          ),
+          strong("What to do: "),
+          "Check the QC Trends tab for outlier samples. Consider whether any samples ",
+          "should be excluded. If batch effects are suspected, make sure you've assigned ",
+          "batch information in the Assign Groups modal."
+        )
+      ))
+    }
+
+    # SCENARIO 4: Outlier sample(s) detected
+    if (length(health$pre_outlier_samples) > 0) {
+      outlier_names <- paste(health$pre_outlier_samples, collapse = ", ")
+      warnings <- c(warnings, list(
+        div(class = "alert alert-warning", role = "alert",
+          icon("user-times"),
+          strong(" Possible outlier sample(s): "),
+          tags$code(outlier_names),
+          br(),
+          "These samples have median intensities substantially different from the rest. ",
+          "This could indicate a failed injection, sample preparation issue, or ",
+          "biological outlier. Check the QC Trends tab and MDS plot for confirmation. ",
+          "If the sample is clearly problematic, consider re-running the analysis ",
+          "without it."
+        )
+      ))
+    }
+
+    # SCENARIO 5: Everything looks good
+    if (health$status == "good" && diann_status %in% c("on", "unknown") &&
+        length(health$pre_outlier_samples) == 0) {
+      warnings <- c(warnings, list(
+        div(class = "alert alert-success", role = "alert",
+          icon("check-circle"),
+          strong(" Distributions look good. "),
+          "Per-sample intensity distributions are well-aligned. ",
+          "No outlier samples detected."
+        )
+      ))
+    }
+
+    do.call(tagList, warnings)
+  })
+
+  # Shared reactive for the diagnostic plot (regular + fullscreen)
+  generate_norm_diagnostic_plot <- reactive({
+    req(values$raw_data, values$y_protein, values$metadata)
+
+    pre_mat <- values$raw_data$E   # precursor-level, log2, NAs present
+    post_mat <- values$y_protein$E # protein-level, log2, no NAs
+    meta <- values$metadata
+
+    if (input$norm_diag_type == "boxplot") {
+      # === BOX PLOT VIEW ===
+      # Subsample precursor matrix if very large (performance)
+      if (nrow(pre_mat) > 10000) {
+        sample_idx <- sample(nrow(pre_mat), 10000)
+        pre_mat_plot <- pre_mat[sample_idx, ]
+      } else {
+        pre_mat_plot <- pre_mat
+      }
+
+      pre_long <- as.data.frame(pre_mat_plot) %>%
+        pivot_longer(everything(), names_to = "Sample", values_to = "Log2Intensity") %>%
+        mutate(Stage = "Precursor Input\n(DIA-NN normalized)") %>%
+        filter(!is.na(Log2Intensity))
+
+      post_long <- as.data.frame(post_mat) %>%
+        pivot_longer(everything(), names_to = "Sample", values_to = "Log2Intensity") %>%
+        mutate(Stage = "Protein Output\n(DPC-Quant)")
+
+      pre_long$Group <- meta$Group[match(pre_long$Sample, meta$File.Name)]
+      post_long$Group <- meta$Group[match(post_long$Sample, meta$File.Name)]
+
+      combined <- bind_rows(pre_long, post_long)
+      combined$Stage <- factor(combined$Stage,
+        levels = c("Precursor Input\n(DIA-NN normalized)", "Protein Output\n(DPC-Quant)"))
+
+      sample_order <- meta %>% arrange(Group, File.Name) %>% pull(File.Name)
+      combined$Sample <- factor(combined$Sample, levels = sample_order)
+      combined$SampleID <- meta$ID[match(combined$Sample, meta$File.Name)]
+
+      p <- ggplot(combined, aes(x = factor(SampleID), y = Log2Intensity, fill = Group)) +
+        geom_boxplot(outlier.size = 0.3, outlier.alpha = 0.3) +
+        facet_wrap(~Stage, scales = "free_y", ncol = 2) +
+        theme_minimal() +
+        labs(
+          title = "Pipeline Diagnostic: Precursor Input \u2192 Protein Output",
+          subtitle = "Left: DIA-NN normalized precursors | Right: DPC-Quant protein estimates",
+          x = "Sample ID", y = "Log2 Intensity"
+        ) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
+
+      ggplotly(p, tooltip = c("x", "y")) %>% layout(boxmode = "group")
+
+    } else {
+      # === DENSITY OVERLAY VIEW ===
+      pre_long <- as.data.frame(pre_mat) %>%
+        pivot_longer(everything(), names_to = "Sample", values_to = "Log2Intensity") %>%
+        mutate(Stage = "Precursor Input (DIA-NN)") %>%
+        filter(!is.na(Log2Intensity))
+
+      post_long <- as.data.frame(post_mat) %>%
+        pivot_longer(everything(), names_to = "Sample", values_to = "Log2Intensity") %>%
+        mutate(Stage = "Protein Output (DPC-Quant)")
+
+      pre_long$Group <- meta$Group[match(pre_long$Sample, meta$File.Name)]
+      post_long$Group <- meta$Group[match(post_long$Sample, meta$File.Name)]
+
+      combined <- bind_rows(pre_long, post_long)
+      combined$Stage <- factor(combined$Stage,
+        levels = c("Precursor Input (DIA-NN)", "Protein Output (DPC-Quant)"))
+
+      p <- ggplot(combined, aes(x = Log2Intensity, color = Group, group = Sample)) +
+        geom_density(alpha = 0.3, linewidth = 0.4) +
+        facet_wrap(~Stage, ncol = 2) +
+        theme_minimal() +
+        labs(
+          title = "Pipeline Diagnostic: Per-Sample Density Curves",
+          subtitle = "Well-aligned input distributions should remain aligned after quantification",
+          x = "Log2 Intensity", y = "Density"
+        )
+
+      ggplotly(p)
+    }
+  })
+
+  output$norm_diagnostic_plot <- renderPlotly({ generate_norm_diagnostic_plot() })
+
+  # Fullscreen modal for pipeline diagnostic
+  observeEvent(input$fullscreen_norm_diag, {
+    showModal(modalDialog(
+      title = "Pipeline Diagnostic - Fullscreen View",
+      plotlyOutput("norm_diagnostic_plot_fullscreen", height = "700px"),
+      size = "xl",
+      easyClose = TRUE,
+      footer = modalButton("Close")
+    ))
+  })
+
+  output$norm_diagnostic_plot_fullscreen <- renderPlotly({ generate_norm_diagnostic_plot() })
+
+  # ============================================================================
 
   output$de_table <- renderDT({
     req(values$fit, input$contrast_selector)
