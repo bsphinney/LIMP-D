@@ -946,3 +946,67 @@ summarise(
 - [ ] Volcano plot: Add annotation/legend indicating FDR threshold used for coloring
 - [ ] GSEA: Add KEGG and Reactome enrichment to the pathway analysis functionality
 - [ ] GSEA: Clarify which DE results (contrast) the GSEA analysis is being performed for
+
+### UI/UX Enhancements (2026-02-12)
+- [ ] **DE Dashboard**: Make comparison bar selectable/clickable to change contrasts directly
+- [ ] **Grid View**: Add bar chart button to switch between violin and bar plot
+- [ ] **Grid View**: Default to violin plot when opening from grid view
+- [ ] **Consistent DE**: Add CV histogram plot (broken out by condition with average CVs)
+- [ ] **All Plots**: Add fullscreen view button to all plot panels
+- [ ] **Data Overview**: Show which comparison is being used for "Signal Distribution Across All Protein Groups"
+- [ ] **Grid View Violin Plots**: Remove close button when opening from expression gridview
+- [ ] **QC Trend Fullscreen**: Add metric selector to switch between Precursors, Proteins, and MS1 Signal
+
+### Feature Enhancements from DIA-Analyst Competitive Analysis (Priority Ranked)
+
+#### Priority 1: Venn Diagram of Significant Proteins
+- [ ] Add Venn/Euler diagram showing overlap of significant proteins across comparisons
+- [ ] Allow selection of 2-3 comparisons from available contrasts
+- [ ] Add fold-change and p-value sliders to pre-filter significance per group
+- [ ] Show counts in each region (unique to A, unique to B, shared)
+- [ ] Make regions clickable to filter results table to those proteins
+- [ ] Use VennDiagram or ggVennDiagram R package
+- [ ] Add to new "Venn" nav_panel in DE Dashboard or as own tab
+- [ ] **Note**: Classic publication figure biologists always need
+
+#### Priority 2: Sample Correlation Heatmap
+- [ ] Add Pearson correlation heatmap across all samples as QC plot
+- [ ] Use cor() on normalized protein intensity matrix
+- [ ] Display with ComplexHeatmap (already a dependency)
+- [ ] Color-code sample annotations by Group
+- [ ] Add to QC Plots tab alongside MDS
+- [ ] **Note**: Most expected QC visualization in proteomics tools
+
+#### Priority 3: Publication-Quality Plot Export Controls
+- [ ] Add export controls to all major plot panels (volcano, heatmap, QC trends, MDS, correlation, Venn, GSEA)
+- [ ] Include: format selector (SVG, PNG, TIFF), height slider, width slider, download button
+- [ ] SVG critical for publication vector graphics
+- [ ] Consider reusable Shiny module for consistent export controls across all plots
+- [ ] **Note**: DIA-Analyst has this on every plot - quality-of-life feature users notice
+
+#### Priority 4: Sample CV Distribution Plots
+- [ ] Show per-condition coefficient of variation distributions as histogram/density plots
+- [ ] Add vertical dashed line showing median CV for each condition
+- [ ] Helps answer "is my Treatment group more variable than my Control?"
+- [ ] Consider placing in Consistent DE tab or QC
+- [ ] One plot per condition, faceted or overlaid with color coding
+
+#### Priority 5: P-value Histogram
+- [ ] Add histogram of raw p-value distribution across all proteins for current comparison
+- [ ] Flat distribution with spike near 0 = good data
+- [ ] U-shaped or uniform = potential problems with statistical model
+- [ ] Quick to implement: hist(de_results$P.Value)
+- [ ] Add as small diagnostic panel in DE Dashboard or QC tab
+
+#### Priority 6: Protein Numbers Bar Plot
+- [ ] Simple bar chart showing number of proteins identified/quantified per sample
+- [ ] Color bars by experimental group
+- [ ] Data already available in QC trends - dedicated bar plot is cleaner summary
+- [ ] Add to QC Plots tab
+
+#### Priority 7: Absence/Presence Table
+- [ ] Identify proteins completely absent in one condition but present in another
+- [ ] "On/off" proteins don't appear well in fold-change analysis but often biologically important
+- [ ] Show as filterable table: columns = Protein, Present_In, Absent_In, Avg_Intensity
+- [ ] Could be sub-tab under DE Dashboard or own section
+- [ ] **Note**: Lower priority - DIA-NN/limpa data has fewer complete missingness cases than DDA
