@@ -387,7 +387,12 @@ ui <- page_sidebar(
                   actionButton("show_grid_view", "Open Grid View", icon = icon("th"), class = "btn-success w-50")
               ),
               card(
-                card_header("Signal Distribution Across All Protein Groups"),
+                card_header(
+                  div(style = "display: flex; justify-content: space-between; align-items: center;",
+                    span("Signal Distribution Across All Protein Groups"),
+                    actionButton("fullscreen_signal", "\U0001F50D View Fullscreen", class = "btn-info btn-sm")
+                  )
+                ),
                 card_body(
                   div(
                     actionButton("color_de", "Color by DE Status", icon = icon("paint-brush"), class = "btn-info btn-sm"),
@@ -424,8 +429,8 @@ ui <- page_sidebar(
     
     nav_panel("QC Plots", icon = icon("chart-line"),
               layout_columns(col_widths=c(6,6),
-                             card(card_header("DPC Fit"), plotOutput("dpc_plot", height="400px")),
-                             card(card_header("MDS Plot"), plotOutput("mds_plot", height="400px"))),
+                             card(card_header(div(style="display:flex;justify-content:space-between;align-items:center;", span("DPC Fit"), actionButton("fullscreen_dpc", "\U0001F50D Fullscreen", class="btn-info btn-sm"))), plotOutput("dpc_plot", height="400px")),
+                             card(card_header(div(style="display:flex;justify-content:space-between;align-items:center;", span("MDS Plot"), actionButton("fullscreen_mds", "\U0001F50D Fullscreen", class="btn-info btn-sm"))), plotOutput("mds_plot", height="400px"))),
               # --- Pipeline Diagnostic: Input → Output Distributions ---
               layout_columns(col_widths = c(12),
                 card(
@@ -486,7 +491,12 @@ ui <- page_sidebar(
               ),
               layout_columns(col_widths=c(12),
                              card(
-                               card_header("Group QC Distribution (Hover for Info)"),
+                               card_header(
+                                 div(style = "display: flex; justify-content: space-between; align-items: center;",
+                                   span("Group QC Distribution (Hover for Info)"),
+                                   actionButton("fullscreen_qc_violin", "\U0001F50D View Fullscreen", class = "btn-info btn-sm")
+                                 )
+                               ),
                                card_body(
                                  selectInput("qc_violin_metric", "Metric:", choices = c("Precursors", "Proteins", "MS1_Signal"), width = "200px"),
                                  plotlyOutput("qc_group_violin", height = "400px")
@@ -504,8 +514,8 @@ ui <- page_sidebar(
               ),
               layout_columns(col_widths = c(6, 6),
                              card(card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Results Table"), div(actionButton("generate_ai_summary", "🤖 Generate AI Summary", class="btn-info btn-sm"), actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"), actionButton("show_violin", "📊 Violin Plot", class="btn-primary btn-xs"), downloadButton("download_result_csv", "💾 Export Results", class="btn-success btn-xs")))), DTOutput("de_table")),
-                             card(card_header("Volcano Plot (Click/Box Select to Filter Table)"), plotlyOutput("volcano_plot_interactive", height = "600px"))),
-              card(card_header("Heatmap"), plotOutput("heatmap_plot", height="400px"))),
+                             card(card_header(div(style="display:flex;justify-content:space-between;align-items:center;", span("Volcano Plot (Click/Box Select to Filter Table)"), actionButton("fullscreen_volcano", "\U0001F50D Fullscreen", class="btn-info btn-sm"))), plotlyOutput("volcano_plot_interactive", height = "600px"))),
+              card(card_header(div(style="display:flex;justify-content:space-between;align-items:center;", span("Heatmap"), actionButton("fullscreen_heatmap", "\U0001F50D Fullscreen", class="btn-info btn-sm"))), plotOutput("heatmap_plot", height="400px"))),
     
     nav_panel("Consistent DE", icon = icon("check-double"),
               card(
@@ -557,9 +567,15 @@ ui <- page_sidebar(
               card(
                 card_header("GSEA Results"),
                 navset_card_tab(
-                  nav_panel("Dot Plot", plotOutput("gsea_dot_plot", height = "500px")),
-                  nav_panel("Enrichment Map", plotOutput("gsea_emapplot", height = "500px")),
-                  nav_panel("Ridgeplot", plotOutput("gsea_ridgeplot", height = "600px")),
+                  nav_panel("Dot Plot",
+                    div(style="text-align:right; margin-bottom:5px;", actionButton("fullscreen_gsea_dot", "\U0001F50D View Fullscreen", class="btn-info btn-sm")),
+                    plotOutput("gsea_dot_plot", height = "500px")),
+                  nav_panel("Enrichment Map",
+                    div(style="text-align:right; margin-bottom:5px;", actionButton("fullscreen_gsea_emap", "\U0001F50D View Fullscreen", class="btn-info btn-sm")),
+                    plotOutput("gsea_emapplot", height = "500px")),
+                  nav_panel("Ridgeplot",
+                    div(style="text-align:right; margin-bottom:5px;", actionButton("fullscreen_gsea_ridge", "\U0001F50D View Fullscreen", class="btn-info btn-sm")),
+                    plotOutput("gsea_ridgeplot", height = "600px")),
                   nav_panel("Results Table", DTOutput("gsea_results_table"))
                 )
               )
@@ -1688,6 +1704,172 @@ server <- function(input, output, session) {
   })
 
   output$norm_diagnostic_plot_fullscreen <- renderPlotly({ generate_norm_diagnostic_plot() })
+
+  # ============================================================================
+  #      Fullscreen Modals for All Plot Panels
+  # ============================================================================
+
+  # --- 1. Signal Distribution (Data Overview) ---
+  observeEvent(input$fullscreen_signal, {
+    showModal(modalDialog(
+      title = "Signal Distribution - Fullscreen View",
+      plotOutput("protein_signal_plot_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$protein_signal_plot_fs <- renderPlot({
+    req(values$y_protein)
+    avg_signal <- rowMeans(values$y_protein$E, na.rm = TRUE)
+    plot_df <- data.frame(Protein.Group = names(avg_signal), Average_Signal_Log2 = avg_signal) %>%
+      mutate(Average_Signal_Log10 = Average_Signal_Log2 / log2(10))
+    if (values$color_plot_by_de && !is.null(values$fit) && !is.null(input$contrast_selector) && nchar(input$contrast_selector) > 0) {
+      de_data_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
+      if (!"Protein.Group" %in% colnames(de_data_raw)) { de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group") } else { de_data_intermediate <- de_data_raw }
+      de_data <- de_data_intermediate %>% mutate(DE_Status = case_when(adj.P.Val < 0.05 & logFC > input$logfc_cutoff ~ "Up-regulated", adj.P.Val < 0.05 & logFC < -input$logfc_cutoff ~ "Down-regulated", TRUE ~ "Not Significant")) %>% dplyr::select(Protein.Group, DE_Status)
+      plot_df <- left_join(plot_df, de_data, by = "Protein.Group"); plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
+    } else { plot_df$DE_Status <- "Not Significant" }
+    if (!is.null(values$plot_selected_proteins)) { plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins } else { plot_df$Is_Selected <- FALSE }
+    selected_df <- filter(plot_df, Is_Selected)
+    p <- ggplot(plot_df, aes(x = reorder(Protein.Group, -Average_Signal_Log10), y = Average_Signal_Log10))
+    if (values$color_plot_by_de && !is.null(values$fit)) {
+      p <- p + geom_point(aes(color = DE_Status), size = 1.5) + scale_color_manual(name = "DE Status", values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70"))
+    } else { p <- p + geom_point(color = "cornflowerblue", size = 1.5) }
+    p + labs(title = "Signal Distribution Across All Protein Groups", x = NULL, y = "Average Signal (Log10 Intensity)") +
+      theme_bw() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  }, height = 700)
+
+  # --- 2. DPC Fit (QC Plots) ---
+  observeEvent(input$fullscreen_dpc, {
+    showModal(modalDialog(
+      title = "DPC Fit - Fullscreen View",
+      plotOutput("dpc_plot_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$dpc_plot_fs <- renderPlot({ req(values$dpc_fit); limpa::plotDPC(values$dpc_fit) }, height = 700)
+
+  # --- 3. MDS Plot (QC Plots) ---
+  observeEvent(input$fullscreen_mds, {
+    showModal(modalDialog(
+      title = "MDS Plot - Fullscreen View",
+      plotOutput("mds_plot_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$mds_plot_fs <- renderPlot({
+    req(values$y_protein, values$metadata)
+    meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]
+    grps <- factor(meta$Group); cols <- rainbow(length(levels(grps)))
+    par(xpd = TRUE)
+    limpa::plotMDSUsingSEs(values$y_protein, pch = 16, main = "MDS Plot", col = cols[grps])
+    legend(x = "right", inset = c(-0.15, 0), legend = levels(grps), col = cols, pch = 16, bty = "n")
+  }, height = 700)
+
+  # --- 4. Group QC Distribution Violin (QC Plots) ---
+  observeEvent(input$fullscreen_qc_violin, {
+    showModal(modalDialog(
+      title = "Group QC Distribution - Fullscreen View",
+      plotlyOutput("qc_group_violin_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$qc_group_violin_fs <- renderPlotly({
+    req(values$qc_stats, values$metadata, input$qc_violin_metric)
+    df <- left_join(values$qc_stats, values$metadata, by = c("Run" = "File.Name"))
+    metric <- input$qc_violin_metric
+    df$Tooltip <- paste0("<b>File:</b> ", df$Run, "<br><b>Val:</b> ", round(df[[metric]], 2))
+    p <- ggplot(df, aes(x = Group, y = .data[[metric]], fill = Group)) +
+      geom_violin(alpha = 0.5, trim = FALSE) +
+      geom_jitter(aes(text = Tooltip), width = 0.2, size = 2, alpha = 0.8, color = "black") +
+      theme_bw() + labs(title = paste("Distribution of", metric), x = "Group", y = metric) +
+      theme(legend.position = "none")
+    ggplotly(p, tooltip = "text")
+  })
+
+  # --- 5. Volcano Plot (DE Dashboard) ---
+  observeEvent(input$fullscreen_volcano, {
+    showModal(modalDialog(
+      title = "Volcano Plot - Fullscreen View",
+      plotlyOutput("volcano_plot_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$volcano_plot_fs <- renderPlotly({
+    df <- volcano_data(); cols <- c("Not Sig" = "grey", "Significant" = "red")
+    p <- ggplot(df, aes(x = logFC, y = -log10(P.Value), text = paste("Protein:", Protein.Group), key = Protein.Group, color = Significance)) +
+      geom_point(alpha = 0.6) + scale_color_manual(values = cols) +
+      geom_vline(xintercept = c(-input$logfc_cutoff, input$logfc_cutoff), linetype = "dashed") +
+      geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+      theme_minimal() + labs(y = "-log10(P-Value)")
+    df_sel <- df %>% filter(Selected == "Yes")
+    if (nrow(df_sel) > 0) p <- p + geom_point(data = df_sel, aes(x = logFC, y = -log10(P.Value)), shape = 21, size = 4, fill = NA, color = "blue", stroke = 2)
+    ggplotly(p, tooltip = "text")
+  })
+
+  # --- 6. Heatmap (DE Dashboard) ---
+  observeEvent(input$fullscreen_heatmap, {
+    showModal(modalDialog(
+      title = "Heatmap - Fullscreen View",
+      plotOutput("heatmap_plot_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$heatmap_plot_fs <- renderPlot({
+    req(values$fit, values$y_protein, input$contrast_selector)
+    df_volc <- volcano_data(); prot_ids <- NULL
+    if (!is.null(input$de_table_rows_selected)) {
+      current_table_data <- df_volc
+      if (!is.null(values$plot_selected_proteins)) current_table_data <- current_table_data %>% filter(Protein.Group %in% values$plot_selected_proteins)
+      prot_ids <- current_table_data$Protein.Group[input$de_table_rows_selected]
+    } else if (!is.null(values$plot_selected_proteins)) {
+      prot_ids <- values$plot_selected_proteins; if (length(prot_ids) > 50) prot_ids <- head(prot_ids, 50)
+    } else { top_prots <- topTable(values$fit, coef = input$contrast_selector, number = 20); prot_ids <- rownames(top_prots) }
+    valid_ids <- intersect(prot_ids, rownames(values$y_protein$E)); if (length(valid_ids) == 0) return(NULL)
+    mat <- values$y_protein$E[valid_ids, , drop = FALSE]; mat_z <- t(apply(mat, 1, cal_z_score))
+    meta <- values$metadata[match(colnames(mat), values$metadata$File.Name), ]; groups <- factor(meta$Group)
+    ha <- HeatmapAnnotation(Group = groups, col = list(Group = setNames(rainbow(length(levels(groups))), levels(groups))))
+    Heatmap(mat_z, name = "Z-score", top_annotation = ha, cluster_rows = TRUE, cluster_columns = TRUE, show_column_names = FALSE)
+  }, height = 700)
+
+  # --- 7. GSEA Dot Plot ---
+  observeEvent(input$fullscreen_gsea_dot, {
+    showModal(modalDialog(
+      title = "GSEA Dot Plot - Fullscreen View",
+      plotOutput("gsea_dot_plot_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$gsea_dot_plot_fs <- renderPlot({
+    req(values$gsea_results)
+    if (nrow(values$gsea_results) > 0) dotplot(values$gsea_results, showCategory = 20) + ggtitle("GSEA GO Biological Process")
+    else plot(NULL, xlim = c(0, 1), ylim = c(0, 1), main = "No significant enrichment found.", xaxt = 'n', yaxt = 'n')
+  }, height = 700)
+
+  # --- 8. GSEA Enrichment Map ---
+  observeEvent(input$fullscreen_gsea_emap, {
+    showModal(modalDialog(
+      title = "GSEA Enrichment Map - Fullscreen View",
+      plotOutput("gsea_emapplot_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$gsea_emapplot_fs <- renderPlot({
+    req(values$gsea_results)
+    if (nrow(values$gsea_results) > 0) emapplot(pairwise_termsim(values$gsea_results), showCategory = 20)
+  }, height = 700)
+
+  # --- 9. GSEA Ridgeplot ---
+  observeEvent(input$fullscreen_gsea_ridge, {
+    showModal(modalDialog(
+      title = "GSEA Ridgeplot - Fullscreen View",
+      plotOutput("gsea_ridgeplot_fs", height = "700px"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+  output$gsea_ridgeplot_fs <- renderPlot({
+    req(values$gsea_results)
+    if (nrow(values$gsea_results) > 0) ridgeplot(values$gsea_results)
+  }, height = 700)
 
   # ============================================================================
 
