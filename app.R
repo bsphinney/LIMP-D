@@ -113,6 +113,16 @@ options(repos = c(BiocManager::repositories(), CRAN = "https://cloud.r-project.o
 
 library(shiny)
 library(bslib)
+
+# Verify bslib version supports responsive UI components
+if (packageVersion("bslib") < "0.5.0") {
+  stop(paste0(
+    "bslib >= 0.5.0 required for responsive UI components.\n",
+    "Current version: ", packageVersion("bslib"), "\n",
+    "Please upgrade: install.packages('bslib')"
+  ))
+}
+
 library(readr)
 library(tibble)
 library(dplyr)
@@ -327,13 +337,66 @@ ui <- page_sidebar(
   theme = bs_theme(bootswatch = "flatly"),
   useShinyjs(), 
   
-  tags$head(tags$style(HTML(" 
+  tags$head(tags$style(HTML("
     .chat-container { height: 500px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 15px; }
     .user-msg { text-align: right; margin: 10px 0; }
     .user-msg span { background-color: #007bff; color: white; padding: 8px 12px; border-radius: 15px 15px 0 15px; display: inline-block; max-width: 80%; }
     .ai-msg { text-align: left; margin: 10px 0; }
     .ai-msg span { background-color: #e9ecef; color: #333; padding: 8px 12px; border-radius: 15px 15px 15px 0; display: inline-block; max-width: 80%; }
     .selection-banner { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 10px; font-weight: bold; border: 1px solid #c3e6cb; }
+
+    /* === RESPONSIVE UI ADDITIONS === */
+
+    /* DE Dashboard responsive grid */
+    .de-dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (max-width: 1200px) {
+      .de-dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Card body with internal scroll for tables */
+    .card-body-scroll {
+      overflow-y: auto;
+      overflow-x: auto;
+      max-height: calc(100vh - 380px);
+    }
+
+    /* Accordion compact styling */
+    .accordion {
+      margin-top: 1rem;
+    }
+
+    .accordion-button {
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+    }
+
+    /* Viewport-relative plot containers */
+    .plot-container-vh {
+      min-height: 400px;
+      max-height: 85vh;
+    }
+
+    /* Compact inline controls */
+    .controls-inline {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Sub-tab navigation styling */
+    .nav-tabs .nav-link {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+    }
   "))),
   
   tags$head(tags$script(HTML(" 
@@ -382,74 +445,132 @@ ui <- page_sidebar(
     id = "main_tabs", 
     
     nav_panel("Data Overview", icon = icon("database"),
-              div(style="display: flex; gap: 10px; margin-bottom: 10px;",
-                  actionButton("show_summary_modal", "View Full Summary", icon = icon("list-alt"), class = "btn-primary w-50"),
-                  actionButton("show_grid_view", "Open Grid View", icon = icon("th"), class = "btn-success w-50")
-              ),
-              card(
-                card_header(
-                  div(style = "display: flex; justify-content: space-between; align-items: center;",
-                    span("Signal Distribution Across All Protein Groups"),
-                    actionButton("fullscreen_signal", "\U0001F50D View Fullscreen", class = "btn-info btn-sm")
-                  )
-                ),
-                card_body(
-                  div(
-                    actionButton("color_de", "Color by DE Status", icon = icon("paint-brush"), class = "btn-info btn-sm"),
-                    actionButton("reset_color", "Reset Colors", icon = icon("undo"), class = "btn-secondary btn-sm")
+              # Data views as tabs
+              navset_card_tab(
+                id = "data_overview_tabs",
+
+                nav_panel("Signal Distribution",
+                  icon = icon("chart-area"),
+                  div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;",
+                    div(
+                      actionButton("color_de", "Color by DE", class = "btn-outline-info btn-sm"),
+                      actionButton("reset_color", "Reset", class = "btn-outline-secondary btn-sm")
+                    ),
+                    actionButton("fullscreen_signal", "🔍 Fullscreen", class = "btn-outline-secondary btn-sm")
                   ),
-                  hr(),
-                  plotOutput("protein_signal_plot", height = "500px")
+                  plotOutput("protein_signal_plot", height = "calc(100vh - 380px)")
+                ),
+
+                nav_panel("Dataset Summary",
+                  icon = icon("info-circle"),
+                  uiOutput("dataset_summary_content")
+                ),
+
+                nav_panel("Group QC Summary",
+                  icon = icon("table"),
+                  DTOutput("group_summary_table")
+                ),
+
+                nav_panel("Expression Grid",
+                  icon = icon("th"),
+                  # Legend and file mapping
+                  div(style = "margin-bottom: 15px;",
+                    uiOutput("grid_legend_ui"),
+                    uiOutput("grid_file_map_ui")
+                  ),
+                  # Control buttons
+                  div(style = "margin-bottom: 10px;",
+                    actionButton("grid_reset_selection", "Show All / Clear Selection", class = "btn-warning btn-sm"),
+                    downloadButton("download_grid_data", "💾 Export Full Table", class = "btn-success btn-sm")
+                  ),
+                  # Grid table
+                  DTOutput("grid_view_table")
                 )
-              ),
-              card(
-                card_header("Group QC Summary"),
-                card_body(DTOutput("group_summary_table"))
               )
     ),
     
     nav_panel("QC Trends", icon = icon("chart-bar"),
-              layout_columns(col_widths=c(12,12),
-                             card(
-                               card_header(
-                                 div(style="display: flex; justify-content: space-between; align-items: center;",
-                                     span("Trend Analysis"),
-                                     actionButton("fullscreen_trend", "🔍 View Fullscreen", class="btn-info btn-sm")
-                                 )
-                               ),
-                               card_body(
-                                 selectInput("qc_metric_select", "Metric:", choices = c("Precursors", "Proteins", "MS1_Signal")),
-                                 radioButtons("qc_sort_order", "Order By:", choices = c("Run Order", "Group"), inline = TRUE),
-                                 plotlyOutput("qc_trend_plot", height = "500px")
-                               )
-                             ),
-                             card(card_header("Stats Table"), DTOutput("r_qc_table"))
+              # Global sort order control
+              div(style = "background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;",
+                div(style = "display: flex; align-items: center; gap: 15px;",
+                  icon("sort", style = "color: #6c757d;"),
+                  strong("Sort Order:"),
+                  radioButtons("qc_sort_order", NULL,
+                    choices = c("Run Order", "Group"),
+                    inline = TRUE,
+                    selected = "Run Order"
+                  ),
+                  span(style = "color: #6c757d; font-size: 0.85em;",
+                    "(Applies to all metric tabs)")
+                )
+              ),
+
+              # Metric tabs
+              navset_card_tab(
+                id = "qc_trends_tabs",
+
+                nav_panel("Precursors",
+                  icon = icon("dna"),
+                  div(style = "text-align: right; margin-bottom: 10px;",
+                    actionButton("fullscreen_trend_precursors", "🔍 Fullscreen",
+                      class = "btn-outline-secondary btn-sm")
+                  ),
+                  plotlyOutput("qc_trend_plot_precursors", height = "calc(100vh - 380px)")
+                ),
+
+                nav_panel("Proteins",
+                  icon = icon("shapes"),
+                  div(style = "text-align: right; margin-bottom: 10px;",
+                    actionButton("fullscreen_trend_proteins", "🔍 Fullscreen",
+                      class = "btn-outline-secondary btn-sm")
+                  ),
+                  plotlyOutput("qc_trend_plot_proteins", height = "calc(100vh - 380px)")
+                ),
+
+                nav_panel("MS1 Signal",
+                  icon = icon("signal"),
+                  div(style = "text-align: right; margin-bottom: 10px;",
+                    actionButton("fullscreen_trend_ms1", "🔍 Fullscreen",
+                      class = "btn-outline-secondary btn-sm")
+                  ),
+                  plotlyOutput("qc_trend_plot_ms1", height = "calc(100vh - 380px)")
+                ),
+
+                nav_panel("Stats Table",
+                  icon = icon("table"),
+                  DTOutput("r_qc_table")
+                )
               )
     ),
     
     nav_panel("QC Plots", icon = icon("chart-line"),
-              layout_columns(col_widths=c(6,6),
-                             card(card_header(div(style="display:flex;justify-content:space-between;align-items:center;", span("DPC Fit"), actionButton("fullscreen_dpc", "\U0001F50D Fullscreen", class="btn-info btn-sm"))), plotOutput("dpc_plot", height="400px")),
-                             card(card_header(div(style="display:flex;justify-content:space-between;align-items:center;", span("MDS Plot"), actionButton("fullscreen_mds", "\U0001F50D Fullscreen", class="btn-info btn-sm"))), plotOutput("mds_plot", height="400px"))),
-              # --- Pipeline Diagnostic: Input → Output Distributions ---
-              layout_columns(col_widths = c(12),
-                card(
-                  card_header(
-                    div(style = "display: flex; justify-content: space-between; align-items: center;",
-                      span("Pipeline Diagnostic: Input \u2192 Output Distributions"),
-                      div(
-                        uiOutput("diann_norm_status_badge", inline = TRUE),
-                        actionButton("fullscreen_norm_diag", "\U0001F50D View Fullscreen", class = "btn-info btn-sm")
-                      )
-                    )
-                  ),
+              navset_card_tab(
+                id = "qc_subtabs",
+
+                # TAB 1: Normalization Diagnostic (FIRST - MOST IMPORTANT)
+                nav_panel("Normalization Diagnostic",
+                  icon = icon("stethoscope"),
                   card_body(
+                    # Guidance banner (keep dynamic uiOutput)
                     uiOutput("norm_diag_guidance"),
-                    radioButtons("norm_diag_type", "View:",
-                      choices = c("Box Plots" = "boxplot", "Density Overlay" = "density"),
-                      inline = TRUE
+
+                    # Control row
+                    div(style = "display: flex; justify-content: space-between; align-items: center; margin: 10px 0;",
+                      div(style = "display: flex; gap: 15px; align-items: center;",
+                        uiOutput("diann_norm_status_badge", inline = TRUE),
+                        radioButtons("norm_diag_type", NULL,
+                          choices = c("Box Plots" = "boxplot", "Density Overlay" = "density"),
+                          inline = TRUE
+                        )
+                      ),
+                      actionButton("fullscreen_norm_diag", "\U0001F50D Fullscreen",
+                        class = "btn-outline-secondary btn-sm")
                     ),
-                    plotlyOutput("norm_diagnostic_plot", height = "450px"),
+
+                    # Plot with viewport height
+                    plotlyOutput("norm_diagnostic_plot", height = "calc(100vh - 380px)"),
+
+                    # Expandable help
                     tags$details(
                       tags$summary(style = "cursor: pointer; color: #0d6efd; font-size: 0.9em; margin-top: 10px;",
                         icon("question-circle"), " What am I looking at?"
@@ -487,21 +608,47 @@ ui <- page_sidebar(
                       )
                     )
                   )
+                ),
+
+                # TAB 2: DPC Fit
+                nav_panel("DPC Fit",
+                  icon = icon("chart-scatter"),
+                  card_body(
+                    div(style = "text-align: right; margin-bottom: 10px;",
+                      actionButton("fullscreen_dpc", "\U0001F50D Fullscreen",
+                        class = "btn-outline-secondary btn-sm")
+                    ),
+                    plotOutput("dpc_plot", height = "70vh")
+                  )
+                ),
+
+                # TAB 3: MDS Plot
+                nav_panel("MDS Plot",
+                  icon = icon("project-diagram"),
+                  card_body(
+                    div(style = "text-align: right; margin-bottom: 10px;",
+                      actionButton("fullscreen_mds", "\U0001F50D Fullscreen",
+                        class = "btn-outline-secondary btn-sm")
+                    ),
+                    plotOutput("mds_plot", height = "70vh")
+                  )
+                ),
+
+                # TAB 4: Group Distribution
+                nav_panel("Group Distribution",
+                  icon = icon("chart-area"),
+                  card_body(
+                    div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;",
+                      selectInput("qc_violin_metric", "Metric:",
+                        choices = c("Precursors", "Proteins", "MS1_Signal"),
+                        width = "200px"
+                      ),
+                      actionButton("fullscreen_qc_violin", "\U0001F50D Fullscreen",
+                        class = "btn-outline-secondary btn-sm")
+                    ),
+                    plotlyOutput("qc_group_violin", height = "calc(100vh - 320px)")
+                  )
                 )
-              ),
-              layout_columns(col_widths=c(12),
-                             card(
-                               card_header(
-                                 div(style = "display: flex; justify-content: space-between; align-items: center;",
-                                   span("Group QC Distribution (Hover for Info)"),
-                                   actionButton("fullscreen_qc_violin", "\U0001F50D View Fullscreen", class = "btn-info btn-sm")
-                                 )
-                               ),
-                               card_body(
-                                 selectInput("qc_violin_metric", "Metric:", choices = c("Precursors", "Proteins", "MS1_Signal"), width = "200px"),
-                                 plotlyOutput("qc_group_violin", height = "400px")
-                               )
-                             )
               )
     ),
     
@@ -512,10 +659,56 @@ ui <- page_sidebar(
                 span("Viewing Comparison:"),
                 uiOutput("current_comparison_display", inline = TRUE, style="margin-left: 10px; color: #ffe066; text-decoration: underline;")
               ),
-              layout_columns(col_widths = c(6, 6),
-                             card(card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Results Table"), div(actionButton("generate_ai_summary", "🤖 Generate AI Summary", class="btn-info btn-sm"), actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"), actionButton("show_violin", "📊 Violin Plot", class="btn-primary btn-xs"), downloadButton("download_result_csv", "💾 Export Results", class="btn-success btn-xs")))), DTOutput("de_table")),
-                             card(card_header(div(style="display:flex;justify-content:space-between;align-items:center;", span("Volcano Plot (Click/Box Select to Filter Table)"), actionButton("fullscreen_volcano", "\U0001F50D Fullscreen", class="btn-info btn-sm"))), plotlyOutput("volcano_plot_interactive", height = "600px"))),
-              card(card_header(div(style="display:flex;justify-content:space-between;align-items:center;", span("Heatmap"), actionButton("fullscreen_heatmap", "\U0001F50D Fullscreen", class="btn-info btn-sm"))), plotOutput("heatmap_plot", height="400px"))),
+
+              # Responsive two-column grid (stacks on small screens)
+              div(class = "de-dashboard-grid",
+                # Results table card (left column)
+                card(
+                  card_header(
+                    div(style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;",
+                      span("Results Table"),
+                      div(
+                        actionButton("generate_ai_summary", "🤖 AI Summary", class="btn-info btn-sm"),
+                        actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"),
+                        actionButton("show_violin", "📊 Violin", class="btn-primary btn-xs"),
+                        downloadButton("download_result_csv", "💾 Export", class="btn-success btn-xs")
+                      )
+                    )
+                  ),
+                  card_body(
+                    class = "card-body-scroll",
+                    DTOutput("de_table")
+                  )
+                ),
+
+                # Volcano plot card (right column)
+                card(
+                  card_header(
+                    div(style="display: flex; justify-content: space-between; align-items: center;",
+                      span("Volcano Plot (Click/Box Select to Filter Table)"),
+                      actionButton("fullscreen_volcano", "🔍 Fullscreen", class="btn-outline-secondary btn-sm")
+                    )
+                  ),
+                  card_body(
+                    plotlyOutput("volcano_plot_interactive", height = "calc(100vh - 380px)")
+                  )
+                )
+              ),
+
+              # Heatmap as accordion (secondary visualization, collapsed by default)
+              accordion(
+                id = "de_heatmap_accordion",
+                open = FALSE,
+                accordion_panel(
+                  "Heatmap of Selected/Top Proteins",
+                  icon = icon("grip"),
+                  div(style = "text-align: right; margin-bottom: 10px;",
+                    actionButton("fullscreen_heatmap", "🔍 Fullscreen", class="btn-outline-secondary btn-sm")
+                  ),
+                  plotOutput("heatmap_plot", height = "450px")
+                )
+              )
+    ),
     
     nav_panel("Consistent DE", icon = icon("check-double"),
               card(
@@ -555,28 +748,48 @@ ui <- page_sidebar(
     ),
     
     nav_panel("Gene Set Enrichment", icon = icon("sitemap"),
+              # Compact control bar
               card(
-                card_header("Gene Ontology (GO) Analysis"),
                 card_body(
-                  actionButton("run_gsea", "Run GSEA", class = "btn-success w-100", icon = icon("play")),
-                  verbatimTextOutput("gsea_status"),
-                  hr(),
-                  p("This panel performs Gene Set Enrichment Analysis on the ranked list of proteins from the DE results. It automatically detects the organism (Human or Mouse) to use the correct annotation database.", class = "text-muted small")
+                  div(style = "display: flex; align-items: center; gap: 15px; flex-wrap: wrap;",
+                    actionButton("run_gsea", "▶ Run GSEA", class = "btn-success", icon = icon("play")),
+                    div(style = "flex-grow: 1;",
+                      verbatimTextOutput("gsea_status", placeholder = TRUE) |>
+                        tagAppendAttributes(style = "margin: 0; padding: 5px 10px; min-height: 38px;")
+                    )
+                  ),
+                  p("Performs Gene Ontology enrichment analysis on DE results. Auto-detects organism (Human/Mouse).",
+                    class = "text-muted small", style = "margin: 10px 0 0 0;")
                 )
               ),
-              card(
-                card_header("GSEA Results"),
-                navset_card_tab(
-                  nav_panel("Dot Plot",
-                    div(style="text-align:right; margin-bottom:5px;", actionButton("fullscreen_gsea_dot", "\U0001F50D View Fullscreen", class="btn-info btn-sm")),
-                    plotOutput("gsea_dot_plot", height = "500px")),
-                  nav_panel("Enrichment Map",
-                    div(style="text-align:right; margin-bottom:5px;", actionButton("fullscreen_gsea_emap", "\U0001F50D View Fullscreen", class="btn-info btn-sm")),
-                    plotOutput("gsea_emapplot", height = "500px")),
-                  nav_panel("Ridgeplot",
-                    div(style="text-align:right; margin-bottom:5px;", actionButton("fullscreen_gsea_ridge", "\U0001F50D View Fullscreen", class="btn-info btn-sm")),
-                    plotOutput("gsea_ridgeplot", height = "600px")),
-                  nav_panel("Results Table", DTOutput("gsea_results_table"))
+
+              # Results tabs with full-height plots
+              navset_card_tab(
+                id = "gsea_results_tabs",
+
+                nav_panel("Dot Plot",
+                  div(style = "text-align: right; margin-bottom: 10px;",
+                    actionButton("fullscreen_gsea_dot", "🔍 Fullscreen", class = "btn-outline-secondary btn-sm")
+                  ),
+                  plotOutput("gsea_dot_plot", height = "calc(100vh - 340px)")
+                ),
+
+                nav_panel("Enrichment Map",
+                  div(style = "text-align: right; margin-bottom: 10px;",
+                    actionButton("fullscreen_gsea_emap", "🔍 Fullscreen", class = "btn-outline-secondary btn-sm")
+                  ),
+                  plotOutput("gsea_emapplot", height = "calc(100vh - 340px)")
+                ),
+
+                nav_panel("Ridgeplot",
+                  div(style = "text-align: right; margin-bottom: 10px;",
+                    actionButton("fullscreen_gsea_ridge", "🔍 Fullscreen", class = "btn-outline-secondary btn-sm")
+                  ),
+                  plotOutput("gsea_ridgeplot", height = "calc(100vh - 340px)")
+                ),
+
+                nav_panel("Results Table",
+                  DTOutput("gsea_results_table")
                 )
               )
     ),
@@ -1219,27 +1432,57 @@ server <- function(input, output, session) {
   # ============================================================================
   output$run_status_msg <- renderText({ values$status })
   
-  observeEvent(input$show_summary_modal, {
+  # Dataset summary as tab content (instead of modal)
+  output$dataset_summary_content <- renderUI({
     req(values$metadata)
+
     summary_elements <- list()
-    summary_elements[[length(summary_elements) + 1]] <- tags$h5("File Summary")
-    summary_elements[[length(summary_elements) + 1]] <- tags$p(paste("Total Files:", nrow(values$metadata)))
-    summary_elements[[length(summary_elements) + 1]] <- tags$p(paste("Assigned Groups:", length(unique(values$metadata$Group[values$metadata$Group != ""])) ))
-    
+
+    # File summary
+    summary_elements[[length(summary_elements) + 1]] <- div(
+      style = "background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;",
+      tags$h4(icon("file"), " File Summary"),
+      tags$hr(),
+      tags$p(style = "font-size: 1.1em;",
+        icon("folder-open"), " ",
+        strong("Total Files: "), nrow(values$metadata)
+      ),
+      tags$p(style = "font-size: 1.1em;",
+        icon("users"), " ",
+        strong("Assigned Groups: "),
+        length(unique(values$metadata$Group[values$metadata$Group != ""]))
+      )
+    )
+
+    # Dataset metrics (if pipeline has run)
     if (!is.null(values$y_protein)) {
-      summary_elements[[length(summary_elements) + 1]] <- tags$hr()
-      summary_elements[[length(summary_elements) + 1]] <- tags$h5("Dataset Metrics")
       avg_signal <- rowMeans(values$y_protein$E, na.rm = TRUE)
       min_linear <- 2^min(avg_signal, na.rm = TRUE)
       max_linear <- 2^max(avg_signal, na.rm = TRUE)
-      if (min_linear > 1e-10) {
+
+      dynamic_range_text <- if (min_linear > 1e-10) {
         orders_of_magnitude <- log10(max_linear / min_linear)
-        summary_elements[[length(summary_elements) + 1]] <- tags$p(paste("Signal Dynamic Range:", round(orders_of_magnitude, 1), "orders of magnitude"))
+        paste(round(orders_of_magnitude, 1), "orders of magnitude")
       } else {
-        summary_elements[[length(summary_elements) + 1]] <- tags$p("Dynamic Range: N/A (Min signal is zero)")
+        "N/A (Min signal is zero)"
       }
+
+      summary_elements[[length(summary_elements) + 1]] <- div(
+        style = "background-color: #f8f9fa; padding: 20px; border-radius: 8px;",
+        tags$h4(icon("chart-bar"), " Dataset Metrics"),
+        tags$hr(),
+        tags$p(style = "font-size: 1.1em;",
+          icon("signal"), " ",
+          strong("Signal Dynamic Range: "), dynamic_range_text
+        ),
+        tags$p(style = "font-size: 1.1em;",
+          icon("dna"), " ",
+          strong("Total Proteins Quantified: "), nrow(values$y_protein$E)
+        )
+      )
     }
-    showModal(modalDialog(title = "Dataset Summary", tagList(summary_elements), easyClose = TRUE, footer = modalButton("Close")))
+
+    tagList(summary_elements)
   })
 
   # --- GRID VIEW & PLOT LOGIC ---
@@ -1270,25 +1513,43 @@ server <- function(input, output, session) {
     list(data = df_final, fixed_cols = fixed_cols, expr_cols = new_headers, valid_cols_map = valid_cols, meta_sorted = meta_sorted, group_colors = group_colors)
   })
 
-  observeEvent(input$show_grid_view, {
+  # Grid View legend UI
+  output$grid_legend_ui <- renderUI({
     gdata <- grid_react_df()
-    legend_ui <- tags$div(style = "margin-bottom: 10px;", tags$strong("Condition Legend:"), tags$br(),
-      lapply(names(gdata$group_colors), function(grp) { tags$span(style = paste0("background-color:", gdata$group_colors[[grp]], "; color:white; padding:2px 6px; margin-right:5px; border-radius:3px;"), grp) })
+    tags$div(
+      style = "background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 10px;",
+      tags$strong(icon("palette"), " Condition Legend:"), tags$br(),
+      lapply(names(gdata$group_colors), function(grp) {
+        tags$span(
+          style = paste0("background-color:", gdata$group_colors[[grp]], "; color:white; padding:4px 10px; margin-right:8px; border-radius:4px; display:inline-block; margin-top:5px;"),
+          grp
+        )
+      })
     )
-    file_map_ui <- tags$details(
-      tags$summary(tags$strong("Click to view File ID Mapping (Run # -> Filename)")),
-      tags$div(style = "max-height: 150px; overflow-y: auto; background: #f9f9f9; padding: 10px; border: 1px solid #eee; margin-top: 5px;",
+  })
+
+  # Grid View file mapping UI
+  output$grid_file_map_ui <- renderUI({
+    gdata <- grid_react_df()
+    tags$details(
+      style = "margin-bottom: 10px;",
+      tags$summary(
+        style = "cursor: pointer; color: #0d6efd;",
+        icon("list"), " Click to view File ID Mapping (Run # → Filename)"
+      ),
+      tags$div(
+        style = "max-height: 200px; overflow-y: auto; background: #f9f9f9; padding: 10px; border: 1px solid #dee2e6; border-radius: 4px; margin-top: 8px;",
         lapply(1:nrow(gdata$meta_sorted), function(i) {
-          row <- gdata$meta_sorted[i, ]; tags$div(tags$span(style="font-weight:bold; color:#007bff;", paste0("[", row$ID, "] ")), tags$span(row$File.Name), tags$span(style="color:gray; font-size:0.9em;", paste0(" (", row$Group, ")")))
+          row <- gdata$meta_sorted[i, ]
+          tags$div(
+            style = "padding: 2px 0;",
+            tags$span(style = "font-weight:bold; color:#007bff;", paste0("[", row$ID, "] ")),
+            tags$span(row$File.Name),
+            tags$span(style = "color:#6c757d; font-size:0.9em;", paste0(" (", row$Group, ")"))
+          )
         })
       )
     )
-
-    showModal(modalDialog(
-      title = "Expression Grid View", size = "xl", legend_ui, file_map_ui, hr(),
-      DTOutput("grid_view_table"),
-      footer = tagList(actionButton("grid_reset_selection", "Show All / Clear Selection", class="btn-warning"), downloadButton("download_grid_data", "Export Full Table (with Filenames)", class="btn-success"), modalButton("Close")), easyClose = TRUE
-    ))
   })
   
   observeEvent(input$grid_reset_selection, { values$plot_selected_proteins <- NULL })
@@ -1389,68 +1650,106 @@ server <- function(input, output, session) {
     datatable(summary_df, options = list(dom = 't', pageLength = 10), rownames = FALSE)
   })
   
-  # Helper function to generate QC trend plot
-  generate_qc_trend_plot <- reactive({
-    req(values$qc_stats, input$qc_metric_select, values$metadata)
-    df <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>%
-      mutate(Run_Number = as.numeric(str_extract(Run, "\\d+$")))
+  # Helper function to generate QC trend plot (parameterized by metric)
+  generate_qc_trend_plot <- function(metric) {
+    reactive({
+      req(values$qc_stats, values$metadata)
+      df <- left_join(values$qc_stats, values$metadata, by=c("Run"="File.Name")) %>%
+        mutate(Run_Number = as.numeric(str_extract(Run, "\\d+$")))
 
-    if (input$qc_sort_order == "Group") {
-      df <- df %>% arrange(Group, Run_Number)
-    } else {
-      df <- df %>% arrange(Run_Number)
-    }
+      if (input$qc_sort_order == "Group") {
+        df <- df %>% arrange(Group, Run_Number)
+      } else {
+        df <- df %>% arrange(Run_Number)
+      }
 
-    df$Sort_Index <- 1:nrow(df)
-    metric <- input$qc_metric_select
-    df$Tooltip <- paste0("<b>File:</b> ", df$Run, "<br><b>Group:</b> ", df$Group,
-                         "<br><b>", metric, ":</b> ", round(df[[metric]], 2))
+      df$Sort_Index <- 1:nrow(df)
+      df$Tooltip <- paste0("<b>File:</b> ", df$Run, "<br><b>Group:</b> ", df$Group,
+                           "<br><b>", metric, ":</b> ", round(df[[metric]], 2))
 
-    # Calculate group means and ranges for average lines
-    group_stats <- df %>%
-      group_by(Group) %>%
-      summarise(
-        mean_value = mean(.data[[metric]], na.rm = TRUE),
-        x_min = min(Sort_Index),
-        x_max = max(Sort_Index),
-        .groups = 'drop'
-      )
+      # Calculate group means and ranges for average lines
+      group_stats <- df %>%
+        group_by(Group) %>%
+        summarise(
+          mean_value = mean(.data[[metric]], na.rm = TRUE),
+          x_min = min(Sort_Index),
+          x_max = max(Sort_Index),
+          .groups = 'drop'
+        )
 
-    # Create plot with bars and group average lines
-    p <- ggplot(df, aes(x = Sort_Index, y = .data[[metric]], fill = Group, text = Tooltip)) +
-      geom_bar(stat = "identity", width = 0.8) +
-      geom_segment(data = group_stats,
-                   aes(x = x_min - 0.5, xend = x_max + 0.5,
-                       y = mean_value, yend = mean_value,
-                       color = Group),
-                   linewidth = 1, linetype = "dashed", inherit.aes = FALSE,
-                   show.legend = FALSE) +
-      scale_color_discrete(guide = "none") +
-      theme_minimal() +
-      labs(title = paste(metric, "per Run (dashed lines = group averages)"),
-           x = "Sample Index (Sorted)", y = metric) +
-      theme(panel.grid.major.x = element_blank(), axis.text.x = element_text(size=8))
+      # Create plot with bars and group average lines
+      p <- ggplot(df, aes(x = Sort_Index, y = .data[[metric]], fill = Group, text = Tooltip)) +
+        geom_bar(stat = "identity", width = 0.8) +
+        geom_segment(data = group_stats,
+                     aes(x = x_min - 0.5, xend = x_max + 0.5,
+                         y = mean_value, yend = mean_value,
+                         color = Group),
+                     linewidth = 1, linetype = "dashed", inherit.aes = FALSE,
+                     show.legend = FALSE) +
+        scale_color_discrete(guide = "none") +
+        theme_minimal() +
+        labs(title = paste(metric, "per Run (dashed lines = group averages)"),
+             x = "Sample Index (Sorted)", y = metric) +
+        theme(panel.grid.major.x = element_blank(), axis.text.x = element_text(size=8))
 
-    ggplotly(p, tooltip = "text") %>% config(displayModeBar = TRUE)
+      ggplotly(p, tooltip = "text") %>% config(displayModeBar = TRUE)
+    })
+  }
+
+  # Three separate plot outputs for the three metrics
+  output$qc_trend_plot_precursors <- renderPlotly({
+    generate_qc_trend_plot("Precursors")()
   })
 
-  output$qc_trend_plot <- renderPlotly({
-    generate_qc_trend_plot()
+  output$qc_trend_plot_proteins <- renderPlotly({
+    generate_qc_trend_plot("Proteins")()
   })
 
-  # Fullscreen modal for QC trend plot
-  observeEvent(input$fullscreen_trend, {
+  output$qc_trend_plot_ms1 <- renderPlotly({
+    generate_qc_trend_plot("MS1_Signal")()
+  })
+
+  # Fullscreen modals for each metric
+  observeEvent(input$fullscreen_trend_precursors, {
     showModal(modalDialog(
-      title = "QC Trend Analysis - Fullscreen View",
-      plotlyOutput("qc_trend_plot_fullscreen", height = "700px"),
+      title = "Precursors Trend - Fullscreen View",
+      plotlyOutput("qc_trend_plot_precursors_fs", height = "700px"),
       size = "xl",
       easyClose = TRUE,
       footer = modalButton("Close")
     ))
   })
 
-  output$qc_trend_plot_fullscreen <- renderPlotly({
-    generate_qc_trend_plot()
+  output$qc_trend_plot_precursors_fs <- renderPlotly({
+    generate_qc_trend_plot("Precursors")()
+  })
+
+  observeEvent(input$fullscreen_trend_proteins, {
+    showModal(modalDialog(
+      title = "Proteins Trend - Fullscreen View",
+      plotlyOutput("qc_trend_plot_proteins_fs", height = "700px"),
+      size = "xl",
+      easyClose = TRUE,
+      footer = modalButton("Close")
+    ))
+  })
+
+  output$qc_trend_plot_proteins_fs <- renderPlotly({
+    generate_qc_trend_plot("Proteins")()
+  })
+
+  observeEvent(input$fullscreen_trend_ms1, {
+    showModal(modalDialog(
+      title = "MS1 Signal Trend - Fullscreen View",
+      plotlyOutput("qc_trend_plot_ms1_fs", height = "700px"),
+      size = "xl",
+      easyClose = TRUE,
+      footer = modalButton("Close")
+    ))
+  })
+
+  output$qc_trend_plot_ms1_fs <- renderPlotly({
+    generate_qc_trend_plot("MS1_Signal")()
   })
 
   output$r_qc_table <- renderDT({ req(values$qc_stats); df_display <- values$qc_stats %>% arrange(Run) %>% mutate(ID = 1:n()) %>% dplyr::select(ID, Run, everything()); datatable(df_display, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE) })
@@ -1463,13 +1762,13 @@ server <- function(input, output, session) {
     ggplotly(p, tooltip = "text")
   })
   
-  output$dpc_plot <- renderPlot({ req(values$dpc_fit); limpa::plotDPC(values$dpc_fit) }, height = 400) # FIXED HEIGHT
+  output$dpc_plot <- renderPlot({ req(values$dpc_fit); limpa::plotDPC(values$dpc_fit) }) # Height controlled by UI (70vh)
   
   output$mds_plot <- renderPlot({
     req(values$y_protein, values$metadata)
     meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]; grps <- factor(meta$Group); cols <- rainbow(length(levels(grps)))
     par(xpd = TRUE); limpa::plotMDSUsingSEs(values$y_protein, pch=16, main="MDS Plot", col=cols[grps]); legend(x = "right", inset = c(-0.2, 0), legend=levels(grps), col=cols, pch=16, bty = "n")
-  }, height = 400) # FIXED HEIGHT
+  }) # Height controlled by UI (70vh)
 
   # ============================================================================
   #      Pipeline Diagnostic: Input → Output Distributions
@@ -2284,9 +2583,9 @@ server <- function(input, output, session) {
     })
   })
   
-  output$gsea_dot_plot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) dotplot(values$gsea_results, showCategory = 20) + ggtitle("GSEA GO Biological Process") else plot(NULL, xlim=c(0,1), ylim=c(0,1), main="No significant enrichment found.", xaxt='n', yaxt='n') }, height = 500) # FIXED HEIGHT
-  output$gsea_emapplot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) emapplot(pairwise_termsim(values$gsea_results), showCategory=20) }, height = 500) # FIXED HEIGHT
-  output$gsea_ridgeplot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) ridgeplot(values$gsea_results) }, height = 600) # FIXED HEIGHT
+  output$gsea_dot_plot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) dotplot(values$gsea_results, showCategory = 20) + ggtitle("GSEA GO Biological Process") else plot(NULL, xlim=c(0,1), ylim=c(0,1), main="No significant enrichment found.", xaxt='n', yaxt='n') }) # Height controlled by UI (calc(100vh - 340px))
+  output$gsea_emapplot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) emapplot(pairwise_termsim(values$gsea_results), showCategory=20) }) # Height controlled by UI (calc(100vh - 340px))
+  output$gsea_ridgeplot <- renderPlot({ req(values$gsea_results); if(nrow(values$gsea_results) > 0) ridgeplot(values$gsea_results) }) # Height controlled by UI (calc(100vh - 340px))
   output$gsea_results_table <- renderDT({ req(values$gsea_results); datatable(as.data.frame(values$gsea_results), options=list(pageLength=10, scrollX=TRUE)) })
   
   observeEvent(input$check_models, { if (nchar(input$user_api_key) < 10) { showNotification("Please enter a valid API Key first.", type="error"); return() }; withProgress(message = "Checking Google Models...", { models <- list_google_models(input$user_api_key); if (length(models) > 0 && !grepl("Error", models[1])) { showModal(modalDialog(title = "Available Models for Your Key", p("Copy one of these into the Model Name box:"), tags$textarea(paste(models, collapse="\n"), rows=10, style="width:100%;"), easyClose = TRUE)) } else { showNotification(paste("Failed to list models:", models), type="error") } }) })

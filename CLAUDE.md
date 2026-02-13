@@ -401,6 +401,71 @@ shiny::runApp('DE-LIMP.R', port=3838, launch.browser=TRUE)
 
 ## Recent Changes & Important Fixes
 
+### 2026-02-13: v2.1 UI Layout Enhancements
+
+**Comprehensive UI Refactoring for Responsive Design**
+
+1. **Converted All Major Tabs to Viewport-Relative Heights** (app.R/DE-LIMP.R lines 330-550)
+   - Replaced all fixed pixel heights (400-700px) with viewport-relative units (`vh`, `calc()`)
+   - Eliminates excessive vertical scrolling within tabs
+   - Plots are now readable without fullscreen on 13" laptops
+   - Responsive design works seamlessly from 13" laptops to 27" monitors
+   - Fullscreen buttons shift from "necessary" to "extra-large enhancement"
+
+2. **QC Plots Tab: Tabbed Sub-Panel Interface** (lines 395-445)
+   - Converted from 4 stacked cards (~1650px vertical) to `navset_card_tab` with 4 sub-tabs
+   - Sub-tabs: Normalization Diagnostic (default/first), DPC Fit, MDS Plot, Group Distribution
+   - Each plot gets full viewport attention: heights of 65-70vh
+   - Normalization Diagnostic remains first/default tab (most important QC view)
+   - All guidance banners, controls, and expandable help text preserved
+   - Eliminates all scrolling - each QC plot fills available screen space
+
+3. **QC Trends Tab: Metric Sub-Tabs** (lines 481-535, server: 1574-1649)
+   - Converted from dropdown selector to 4 dedicated sub-tabs
+   - Sub-tabs: Precursors, Proteins, MS1 Signal, Stats Table
+   - Global sort order control (Run Order/Group) applies across all metric tabs
+   - Parameterized server-side plot generation: `generate_qc_trend_plot(metric)` function
+   - Three separate plotly outputs (one per metric) with individual fullscreen buttons
+   - Plot height: `calc(100vh - 380px)` - fills available viewport
+   - Cleaner, more intuitive navigation than dropdown selector
+
+4. **Data Overview Tab: Integrated Sub-Tabs** (lines 447-495, server: 1506-1545)
+   - Converted from separate cards/buttons/modals to unified `navset_card_tab` with 4 sub-tabs
+   - Sub-tabs: Signal Distribution, Dataset Summary, Group QC Summary, Expression Grid
+   - **Expression Grid**: Converted from modal popup to inline tab
+     - Grid legend and file mapping now use `renderUI` (grid_legend_ui, grid_file_map_ui)
+     - Removed modal dialog code (`observeEvent(input$show_grid_view)`)
+     - Full integration with tab navigation system
+   - **Dataset Summary**: Converted modal content to `renderUI` output with card styling
+   - All content accessible via tab navigation, no popups required
+   - Plot height: `calc(100vh - 380px)` for responsive sizing
+
+5. **Eliminated UI Anti-Patterns**
+   - ❌ Removed: Dropdown metric selectors that require clicking to switch views
+   - ❌ Removed: Modal popups for primary content (Grid View, Dataset Summary)
+   - ❌ Removed: Fixed pixel heights causing scroll-heavy layouts
+   - ✅ Added: Clean tabbed navigation for all multi-plot sections
+   - ✅ Added: Viewport-relative heights that adapt to screen size
+   - ✅ Added: Global controls (sort order) that apply across related tabs
+
+6. **Responsive Design Patterns**
+   - DE Dashboard uses responsive grid (`.de-dashboard-grid`) that stacks at <1200px width
+   - All tabs tested for 13" laptops (1280x800) to 27" monitors (2560x1440)
+   - No horizontal scrolling at any screen size
+   - Fullscreen modals preserved as "extra-large view" option
+   - Internal table scrolling where appropriate (DE Dashboard results table)
+
+7. **Files Modified**
+   - `app.R` and `DE-LIMP.R` (identical changes to both files)
+   - Added comprehensive responsive CSS (~50 lines after line 337)
+   - Modified UI structure for QC Plots, QC Trends, Data Overview tabs
+   - Refactored server-side plot generation (parameterized QC Trends plots)
+   - Added renderUI outputs for Grid View legend and file mapping
+
+**Implementation Reference**: Complete specifications in `UI_LAYOUT_SPEC.md`
+
+**Testing**: Verified on multiple screen sizes (13" laptop to 27" monitor), all functionality preserved, no regressions.
+
 ### 2026-02-11: v2.0.1 Enhancement Release
 
 **⚠️ README Conflict Incident #8**: HF deployment broke after CLAUDE.md update
