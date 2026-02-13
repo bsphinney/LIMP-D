@@ -949,13 +949,13 @@ summarise(
 
 ### UI/UX Enhancements (2026-02-12)
 - [ ] **DE Dashboard**: Make comparison bar selectable/clickable to change contrasts directly
-- [ ] **Grid View**: Add bar chart button to switch between violin and bar plot
-- [ ] **Grid View**: Default to violin plot when opening from grid view
+- [ ] **Grid View Protein Plot**: When clicking a protein from grid view, open violin plot (default) with button to switch to bar plot view (showing all samples), and bar plot should have toggle button to switch between regular and log2 scale
 - [ ] **Consistent DE**: Add CV histogram plot (broken out by condition with average CVs)
 - [ ] **All Plots**: Add fullscreen view button to all plot panels
 - [ ] **Data Overview**: Show which comparison is being used for "Signal Distribution Across All Protein Groups"
 - [ ] **Grid View Violin Plots**: Remove close button when opening from expression gridview
 - [ ] **QC Trend Fullscreen**: Add metric selector to switch between Precursors, Proteins, and MS1 Signal
+- [ ] **QC Plots**: Add Normalization Diagnostic plot showing before/after comparison (precursor-level vs protein-level, box plots + density overlay, DIA-NN normalization status detection) - Implement per spec in `NORMALIZATION_DIAGNOSTIC_SPEC.md`
 
 ### Feature Enhancements from DIA-Analyst Competitive Analysis (Priority Ranked)
 
