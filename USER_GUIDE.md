@@ -4,6 +4,33 @@ Welcome to **DE-LIMP** (Differential Expression & Limpa Proteomics), your intera
 
 ---
 
+## ✨ What's New in v2.1 (February 2026)
+
+### Major UI/UX Enhancements
+
+**Comparison Selector Synchronization**
+- All comparison selectors now sync automatically across tabs
+- Purple gradient banners show active comparison on Signal Distribution, Expression Grid, and P-value Distribution tabs
+- Change any selector → all others update immediately
+
+**Enhanced Visualizations**
+- **Volcano Plot**: Now includes colored threshold lines (blue FDR, orange logFC) with significance criteria legend box
+- **Dataset Summary**: Shows DE protein counts per comparison with explicit directional arrows (e.g., "↑ 189 proteins higher in Evosep")
+- **P-value Distribution**: New diagnostic plot with automated pattern detection and color-coded guidance banners
+- **CV Distribution**: New histogram showing protein variability distribution per experimental group
+- **Signal Distribution**: Always shows DE coloring automatically (no manual toggle needed)
+
+**AI Summary**
+- Moved from modal popup to dedicated sub-tab in Data Overview
+- Results display inline for easier workflow
+
+**Responsive Design**
+- All plots now use viewport-relative heights for optimal viewing on any screen size
+
+See [CHANGELOG.md](CHANGELOG.md) for complete version history.
+
+---
+
 ## 1. Getting Started
 
 ### Prerequisites
