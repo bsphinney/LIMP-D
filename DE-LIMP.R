@@ -420,21 +420,16 @@ ui <- page_sidebar(
                  style = "margin-bottom: 10px;"),
     numericInput("q_cutoff", "Q-Value Cutoff", value = 0.01, min = 0, max = 0.1, step = 0.01),
     hr(),
-    h5("2. Setup"),
-    actionButton("open_setup", "Assign Groups & Run Pipeline", class = "btn-success w-100", icon = icon("table")),
-    textOutput("run_status_msg"),
-    hr(),
-    h5("3. Session"),
+    h5("2. Session"),
     div(style="display: flex; gap: 5px; margin-bottom: 5px;",
       downloadButton("save_session", "Save", class = "btn-primary w-50", icon = icon("download")),
       actionButton("load_session_btn", "Load", class = "btn-outline-primary w-50", icon = icon("upload"))
     ),
     hr(),
-    h5("4. Explore Results"),
-    selectInput("contrast_selector", "Comparison:", choices=NULL, width="100%"),
+    h5("3. Explore Results"),
     sliderInput("logfc_cutoff", "Min Log2 Fold Change:", min=0, max=5, value=1, step=0.1),
     hr(),
-    h5("5. AI Chat"),
+    h5("4. AI Chat"),
     passwordInput("user_api_key", "Gemini API Key", value = "", placeholder = "AIzaSy..."),
     actionButton("check_models", "Check Models", class="btn-warning btn-xs w-100"),
     br(), br(),
@@ -449,16 +444,81 @@ ui <- page_sidebar(
               navset_card_tab(
                 id = "data_overview_tabs",
 
+                nav_panel("Assign Groups & Run",
+                  icon = icon("table"),
+                  # Tip banner
+                  div(style="background-color: #e7f3ff; padding: 10px; border-radius: 5px; margin-bottom: 15px;",
+                    icon("info-circle"),
+                    strong(" Tip: "),
+                    "Assign experimental groups (required). Covariate columns are optional - customize names and include in model as needed."
+                  ),
+
+                  # Top row: Auto-Guess button + Covariates + Action buttons
+                  div(style="display: grid; grid-template-columns: 200px 1fr 250px; gap: 15px; margin-bottom: 15px;",
+                    # Left column: Auto-Guess + Template buttons
+                    div(
+                      actionButton("guess_groups", "🪄 Auto-Guess Groups", class="btn-info btn-sm w-100"),
+                      br(), br(),
+                      strong("Template:"),
+                      div(style="display: flex; gap: 5px; margin-top: 5px;",
+                        downloadButton("export_template", "📥 Export", class="btn-secondary btn-sm"),
+                        actionButton("import_template", "📤 Import", class="btn-secondary btn-sm")
+                      )
+                    ),
+
+                    # Middle column: Covariates
+                    div(
+                      strong("Covariates:"),
+                      div(style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 5px;",
+                        div(
+                          checkboxInput("include_batch", "Batch", value = FALSE),
+                          textInput("batch_label", NULL, value = "Batch", placeholder = "e.g., Batch")
+                        ),
+                        div(
+                          checkboxInput("include_cov1", NULL, value = FALSE),
+                          textInput("cov1_label", "Name:", value = "Covariate1",
+                                   placeholder = "e.g., Sex, Diet")
+                        ),
+                        div(
+                          checkboxInput("include_cov2", NULL, value = FALSE),
+                          textInput("cov2_label", "Name:", value = "Covariate2",
+                                   placeholder = "e.g., Age, Time")
+                        )
+                      )
+                    ),
+
+                    # Right column: Run Pipeline button
+                    div(style="display: flex; flex-direction: column; justify-content: center;",
+                      actionButton("run_pipeline", "▶ Run Pipeline",
+                        class="btn-success btn-lg w-100", icon = icon("play"),
+                        style="padding: 15px; font-size: 1.1em;")
+                    )
+                  ),
+
+                  # Metadata table
+                  rHandsontableOutput("hot_metadata", height = "calc(100vh - 480px)")
+                ),
+
                 nav_panel("Signal Distribution",
                   icon = icon("chart-area"),
-                  div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;",
-                    div(
-                      actionButton("color_de", "Color by DE", class = "btn-outline-info btn-sm"),
-                      actionButton("reset_color", "Reset", class = "btn-outline-secondary btn-sm")
+                  # Comparison selector banner
+                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;",
+                    div(style = "display: flex; align-items: center; gap: 10px;",
+                      icon("microscope"),
+                      span("Viewing Comparison:", style = "font-weight: 500;")
                     ),
+                    div(style = "flex-grow: 1; max-width: 400px;",
+                      selectInput("contrast_selector_signal", NULL,
+                        choices = NULL,
+                        width = "100%"
+                      )
+                    )
+                  ),
+                  # Control buttons
+                  div(style = "display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;",
                     actionButton("fullscreen_signal", "🔍 Fullscreen", class = "btn-outline-secondary btn-sm")
                   ),
-                  plotOutput("protein_signal_plot", height = "calc(100vh - 380px)")
+                  plotOutput("protein_signal_plot", height = "calc(100vh - 370px)")
                 ),
 
                 nav_panel("Dataset Summary",
@@ -473,6 +533,19 @@ ui <- page_sidebar(
 
                 nav_panel("Expression Grid",
                   icon = icon("th"),
+                  # Comparison selector banner
+                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;",
+                    div(style = "display: flex; align-items: center; gap: 10px;",
+                      icon("microscope"),
+                      span("Viewing Comparison:", style = "font-weight: 500;")
+                    ),
+                    div(style = "flex-grow: 1; max-width: 400px;",
+                      selectInput("contrast_selector_grid", NULL,
+                        choices = NULL,
+                        width = "100%"
+                      )
+                    )
+                  ),
                   # Legend and file mapping
                   div(style = "margin-bottom: 15px;",
                     uiOutput("grid_legend_ui"),
@@ -485,10 +558,44 @@ ui <- page_sidebar(
                   ),
                   # Grid table
                   DTOutput("grid_view_table")
+                ),
+
+                nav_panel("AI Summary",
+                  icon = icon("robot"),
+                  div(style = "padding: 20px;",
+                    # Header section
+                    div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px;",
+                      tags$h4(icon("robot"), " AI-Powered Analysis Summary", style = "margin: 0; font-weight: 500;")
+                    ),
+
+                    # Instructions
+                    div(style = "background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;",
+                      tags$p(class = "mb-2",
+                        icon("info-circle"), " ",
+                        strong("How it works:"),
+                        " Click the button below to generate an AI-powered summary of your differential expression results."
+                      ),
+                      tags$p(class = "mb-0", style = "font-size: 0.9em; color: #6c757d;",
+                        "The AI will analyze the top differentially expressed proteins and most stable proteins from the current comparison."
+                      )
+                    ),
+
+                    # Generate button
+                    div(style = "text-align: center; margin-bottom: 20px;",
+                      actionButton("generate_ai_summary_overview",
+                        "🤖 Generate AI Summary",
+                        class = "btn-info btn-lg",
+                        style = "padding: 12px 30px; font-size: 1.1em;"
+                      )
+                    ),
+
+                    # Output area
+                    uiOutput("ai_summary_output")
+                  )
                 )
               )
     ),
-    
+
     nav_panel("QC Trends", icon = icon("chart-bar"),
               # Global sort order control
               div(style = "background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;",
@@ -648,16 +755,90 @@ ui <- page_sidebar(
                     ),
                     plotlyOutput("qc_group_violin", height = "calc(100vh - 320px)")
                   )
+                ),
+
+                # TAB 5: P-value Distribution Diagnostic
+                nav_panel("P-value Distribution",
+                  icon = icon("chart-column"),
+                  # Comparison selector banner
+                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;",
+                    div(style = "display: flex; align-items: center; gap: 10px;",
+                      icon("microscope"),
+                      span("Viewing Comparison:", style = "font-weight: 500;")
+                    ),
+                    div(style = "flex-grow: 1; max-width: 400px;",
+                      selectInput("contrast_selector_pvalue", NULL,
+                        choices = NULL,
+                        width = "100%"
+                      )
+                    )
+                  ),
+                  card_body(
+                    # Automated contextual guidance (changes based on detected pattern)
+                    uiOutput("pvalue_guidance"),
+
+                    # Control row
+                    div(style = "display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;",
+                      actionButton("fullscreen_pvalue_hist", "\U0001F50D Fullscreen",
+                        class = "btn-outline-secondary btn-sm")
+                    ),
+
+                    # Plot
+                    plotOutput("pvalue_histogram", height = "calc(100vh - 450px)"),
+
+                    # Expandable interpretation guide
+                    tags$details(
+                      tags$summary(style = "cursor: pointer; color: #0d6efd; font-size: 0.9em; margin-top: 10px;",
+                        icon("question-circle"), " How do I interpret this?"
+                      ),
+                      div(style = "background-color: #f8f9fa; padding: 12px; border-radius: 5px;
+                                   margin-top: 8px; font-size: 0.85em; line-height: 1.6;",
+                        tags$h6("What this plot shows"),
+                        p("This histogram displays the distribution of raw (unadjusted) p-values from your differential expression analysis. ",
+                          "Each bar represents how many proteins have p-values falling in that range."),
+
+                        tags$h6("What 'good' looks like"),
+                        tags$ul(
+                          tags$li(strong("Flat with a spike at zero: "), "Most p-values uniformly distributed (flat histogram) with a peak near p=0. ",
+                            "This indicates a mix of non-changing proteins (uniform) and true positives (spike at zero)."),
+                          tags$li(strong("Expected under the null: "), "For proteins that are truly not changing, p-values should be uniformly distributed between 0 and 1. ",
+                            "The dashed red line shows this expected uniform distribution.")
+                        ),
+
+                        tags$h6("Warning signs"),
+                        tags$ul(
+                          tags$li(strong("Too many intermediate p-values (0.3-0.7): "), "May indicate p-value inflation due to unmodeled variance, batch effects, or outliers."),
+                          tags$li(strong("Depletion near zero: "), "Too few small p-values suggests the test is overly conservative or lacks statistical power."),
+                          tags$li(strong("U-shaped distribution: "), "Enrichment at both ends (near 0 and 1) can indicate problems with the statistical model or data quality."),
+                          tags$li(strong("Completely uniform: "), "No enrichment at p=0 means no differential expression detected, or the test has no power.")
+                        ),
+
+                        tags$h6("What to do if it looks wrong"),
+                        tags$ul(
+                          tags$li("Check the Normalization Diagnostic tab to ensure samples are properly normalized"),
+                          tags$li("Review the MDS plot for outlier samples or unwanted variation"),
+                          tags$li("Consider adding batch or other covariates to the model if appropriate"),
+                          tags$li("Verify that sample sizes are adequate for the comparison")
+                        )
+                      )
+                    )
+                  )
                 )
               )
     ),
     
     nav_panel("DE Dashboard", icon = icon("table-columns"),
-              # Prominent comparison indicator
-              div(style="background-color: #007bff; color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-size: 1.2em; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);",
-                icon("microscope", style="margin-right: 10px;"),
-                span("Viewing Comparison:"),
-                uiOutput("current_comparison_display", inline = TRUE, style="margin-left: 10px; color: #ffe066; text-decoration: underline;")
+              # Interactive comparison selector
+              div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;",
+                div(style = "display: flex; align-items: center; gap: 15px;",
+                  icon("microscope"),
+                  span("Viewing Comparison:", style = "font-weight: 500;"),
+                  selectInput("contrast_selector",
+                    label = NULL,
+                    choices = NULL,
+                    width = "300px"
+                  )
+                )
               ),
 
               # Responsive two-column grid (stacks on small screens)
@@ -668,7 +849,6 @@ ui <- page_sidebar(
                     div(style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;",
                       span("Results Table"),
                       div(
-                        actionButton("generate_ai_summary", "🤖 AI Summary", class="btn-info btn-sm"),
                         actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"),
                         actionButton("show_violin", "📊 Violin", class="btn-primary btn-xs"),
                         downloadButton("download_result_csv", "💾 Export", class="btn-success btn-xs")
@@ -711,11 +891,32 @@ ui <- page_sidebar(
     ),
     
     nav_panel("Consistent DE", icon = icon("check-double"),
-              card(
-                card_header("High-Consistency Significant Proteins (Ranked by %CV)"),
-                card_body(
-                  p("Ranking by %CV (Coefficient of Variation) to find stable markers."),
-                  DTOutput("consistent_table")
+              navset_card_tab(
+                id = "consistent_de_tabs",
+
+                # TAB 1: High-Consistency Table
+                nav_panel("High-Consistency Table",
+                  icon = icon("table"),
+                  card_body(
+                    p("Ranking by %CV (Coefficient of Variation) to find stable markers across all experimental groups.",
+                      class = "text-muted small mb-3"),
+                    DTOutput("consistent_table")
+                  )
+                ),
+
+                # TAB 2: CV Distribution Histogram
+                nav_panel("CV Distribution",
+                  icon = icon("chart-bar"),
+                  card_body(
+                    # Control row
+                    div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;",
+                      p("Distribution of Coefficient of Variation (CV) for significant proteins, broken down by experimental group.",
+                        class = "text-muted small mb-0"),
+                      actionButton("fullscreen_cv_hist", "\U0001F50D Fullscreen",
+                        class = "btn-outline-secondary btn-sm")
+                    ),
+                    plotOutput("cv_histogram", height = "calc(100vh - 320px)")
+                  )
                 )
               )
     ),
@@ -926,7 +1127,9 @@ server <- function(input, output, session) {
         ))
 
         showNotification("Example data loaded successfully!", type = "message", duration = 3)
-        click("open_setup")
+        # Navigate to Assign Groups sub-tab
+        nav_select("main_tabs", "Data Overview")
+        nav_select("data_overview_tabs", "Assign Groups & Run")
 
       }, error = function(e) {
         showNotification(paste("Error loading example data:", e$message), type = "error", duration = 10)
@@ -971,7 +1174,9 @@ server <- function(input, output, session) {
           } else { "unknown" }
         }, error = function(e) "unknown")
 
-        click("open_setup")
+        # Navigate to Assign Groups sub-tab
+        nav_select("main_tabs", "Data Overview")
+        nav_select("data_overview_tabs", "Assign Groups & Run")
       }, error=function(e) { showNotification(paste("Error:", e$message), type="error") })
     })
   })
@@ -986,61 +1191,13 @@ server <- function(input, output, session) {
   })
 
   # Old standalone "Run Pipeline" button observer - REMOVED
-  # Pipeline now runs from the "Assign Groups" modal via run_from_modal observer
+  # Pipeline now runs from the "Assign Groups & Run" sub-tab via run_pipeline observer
   
   # ============================================================================
-  #      3. Setup Modal & Metadata Handling
+  #      3. Metadata Handling (Assign Groups sub-tab)
   # ============================================================================
-  observeEvent(input$open_setup, { 
-    req(values$metadata)
-    showModal(modalDialog(
-      title = "Assign Groups & Run Pipeline", size = "xl",
-      div(style="background-color: #e7f3ff; padding: 10px; border-radius: 5px; margin-bottom: 10px;",
-        icon("info-circle"),
-        strong(" Tip: "),
-        "Assign experimental groups (required). Covariate columns are optional - customize names and include in model as needed."
-      ),
-      layout_columns(col_widths = c(4, 8),
-        div(
-          actionButton("guess_groups", "🪄 Auto-Guess Groups", class="btn-info btn-sm"),
-          br(), br(),
-          strong("Template:"),
-          div(style="display: flex; gap: 5px; margin-top: 5px; margin-bottom: 10px;",
-            downloadButton("export_template", "📥 Export", class="btn-secondary btn-sm"),
-            actionButton("import_template", "📤 Import", class="btn-secondary btn-sm")
-          ),
-          div(style="display: flex; gap: 10px;",
-            modalButton("Cancel"),
-            actionButton("run_from_modal", "▶ Run Pipeline", class="btn-success", icon = icon("play"))
-          )
-        ),
-        div(
-          strong("Covariates:"),
-          div(style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 5px;",
-            div(
-              checkboxInput("include_batch", "Batch", value = FALSE),
-              textInput("batch_label", NULL, value = "Batch", placeholder = "e.g., Batch")
-            ),
-            div(
-              checkboxInput("include_cov1", NULL, value = FALSE),
-              textInput("cov1_label", "Name:", value = values$cov1_name %||% "Covariate1",
-                       placeholder = "e.g., Sex, Diet")
-            ),
-            div(
-              checkboxInput("include_cov2", NULL, value = FALSE),
-              textInput("cov2_label", "Name:", value = values$cov2_name %||% "Covariate2",
-                       placeholder = "e.g., Age, Time")
-            )
-          )
-        )
-      ),
-      br(),
-      rHandsontableOutput("hot_metadata_modal"),
-      footer = NULL
-    ))
-  })
 
-  output$hot_metadata_modal <- renderRHandsontable({
+  output$hot_metadata <- renderRHandsontable({
     req(values$metadata)
 
     # Get custom covariate names
@@ -1066,7 +1223,7 @@ server <- function(input, output, session) {
 
   observeEvent(input$guess_groups, {
     req(values$metadata)
-    meta <- if(!is.null(input$hot_metadata_modal)) hot_to_r(input$hot_metadata_modal) else values$metadata
+    meta <- if(!is.null(input$hot_metadata)) hot_to_r(input$hot_metadata) else values$metadata
 
     cleaned_filenames <- str_remove(meta$File.Name, "^\\d{8}_")
     cleaned_filenames <- str_remove_all(cleaned_filenames, "_deepfrac|\\.parquet")
@@ -1109,13 +1266,13 @@ server <- function(input, output, session) {
     values$metadata <- meta
   })
 
-  # Run pipeline from modal - saves groups and runs pipeline
-  observeEvent(input$run_from_modal, {
-    req(input$hot_metadata_modal, values$metadata, values$raw_data)
+  # Run pipeline from "Assign Groups & Run" sub-tab - saves groups and runs pipeline
+  observeEvent(input$run_pipeline, {
+    req(input$hot_metadata, values$metadata, values$raw_data)
 
     # First, save the groups
     old_meta <- values$metadata
-    new_meta <- hot_to_r(input$hot_metadata_modal)
+    new_meta <- hot_to_r(input$hot_metadata)
     changed_indices <- which(old_meta$Group != new_meta$Group)
     if (length(changed_indices) > 0) {
       code_lines <- sprintf("metadata$Group[%d] <- '%s'  # %s",
@@ -1134,8 +1291,6 @@ server <- function(input, output, session) {
       return()
     }
 
-    # Close modal
-    removeModal()
     showNotification("Groups saved! Running pipeline...", type="message")
 
     # Build covariates list for logging
@@ -1350,7 +1505,11 @@ server <- function(input, output, session) {
         fit <- eBayes(fit)
         values$fit <- fit
 
+        # Update all four comparison selectors
         updateSelectInput(session, "contrast_selector", choices=forms)
+        updateSelectInput(session, "contrast_selector_signal", choices=forms, selected=forms[1])
+        updateSelectInput(session, "contrast_selector_grid", choices=forms, selected=forms[1])
+        updateSelectInput(session, "contrast_selector_pvalue", choices=forms, selected=forms[1])
         values$status <- "✅ Complete!"
 
         # Log contrasts
@@ -1383,6 +1542,41 @@ server <- function(input, output, session) {
         sprintf("# Viewing contrast: %s", input$contrast_selector),
         sprintf("results <- topTable(fit, coef='%s', number=Inf)", input$contrast_selector)
       ))
+    }
+
+    # Sync with Signal Distribution, Expression Grid, and P-value Distribution selectors
+    if (!is.null(input$contrast_selector_signal) && input$contrast_selector_signal != input$contrast_selector) {
+      updateSelectInput(session, "contrast_selector_signal", selected = input$contrast_selector)
+    }
+    if (!is.null(input$contrast_selector_grid) && input$contrast_selector_grid != input$contrast_selector) {
+      updateSelectInput(session, "contrast_selector_grid", selected = input$contrast_selector)
+    }
+    if (!is.null(input$contrast_selector_pvalue) && input$contrast_selector_pvalue != input$contrast_selector) {
+      updateSelectInput(session, "contrast_selector_pvalue", selected = input$contrast_selector)
+    }
+  })
+
+  # Sync Signal Distribution selector with main selector
+  observeEvent(input$contrast_selector_signal, {
+    req(input$contrast_selector_signal)
+    if (!is.null(input$contrast_selector) && input$contrast_selector != input$contrast_selector_signal) {
+      updateSelectInput(session, "contrast_selector", selected = input$contrast_selector_signal)
+    }
+  })
+
+  # Sync Expression Grid selector with main selector
+  observeEvent(input$contrast_selector_grid, {
+    req(input$contrast_selector_grid)
+    if (!is.null(input$contrast_selector) && input$contrast_selector != input$contrast_selector_grid) {
+      updateSelectInput(session, "contrast_selector", selected = input$contrast_selector_grid)
+    }
+  })
+
+  # Sync P-value Distribution selector with main selector
+  observeEvent(input$contrast_selector_pvalue, {
+    req(input$contrast_selector_pvalue)
+    if (!is.null(input$contrast_selector) && input$contrast_selector != input$contrast_selector_pvalue) {
+      updateSelectInput(session, "contrast_selector", selected = input$contrast_selector_pvalue)
     }
   })
 
@@ -1468,7 +1662,7 @@ server <- function(input, output, session) {
       }
 
       summary_elements[[length(summary_elements) + 1]] <- div(
-        style = "background-color: #f8f9fa; padding: 20px; border-radius: 8px;",
+        style = "background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;",
         tags$h4(icon("chart-bar"), " Dataset Metrics"),
         tags$hr(),
         tags$p(style = "font-size: 1.1em;",
@@ -1482,7 +1676,180 @@ server <- function(input, output, session) {
       )
     }
 
+    # Differential expression summary (if DE analysis has run)
+    if (!is.null(values$fit)) {
+      # Calculate DE proteins per comparison
+      all_comparisons <- colnames(values$fit$contrasts)
+      de_summary_list <- list()
+
+      for (comp in all_comparisons) {
+        de_results <- topTable(values$fit, coef = comp, number = Inf)
+        n_sig <- sum(de_results$adj.P.Val < 0.05, na.rm = TRUE)
+        n_up <- sum(de_results$adj.P.Val < 0.05 & de_results$logFC > 0, na.rm = TRUE)
+        n_down <- sum(de_results$adj.P.Val < 0.05 & de_results$logFC < 0, na.rm = TRUE)
+
+        # Parse comparison name (format: "GroupA - GroupB")
+        comp_parts <- strsplit(comp, " - ")[[1]]
+        if (length(comp_parts) == 2) {
+          group_a <- trimws(comp_parts[1])
+          group_b <- trimws(comp_parts[2])
+        } else {
+          group_a <- "Group 1"
+          group_b <- "Group 2"
+        }
+
+        # Create explicit, easy-to-read summary
+        de_summary_list[[length(de_summary_list) + 1]] <- div(
+          style = "margin-bottom: 15px; padding: 12px; background-color: white; border-left: 4px solid #667eea; border-radius: 4px;",
+          # Comparison header
+          tags$p(style = "font-size: 1.05em; margin-bottom: 8px; font-weight: 500;",
+            icon("microscope"), " ",
+            strong(comp),
+            span(style = "margin-left: 10px; color: #6c757d; font-weight: normal; font-size: 0.9em;",
+              paste0("(", n_sig, " significant proteins)")
+            )
+          ),
+          # Detailed breakdown
+          if (n_sig > 0) {
+            tagList(
+              tags$div(style = "margin-left: 25px; font-size: 0.95em;",
+                tags$div(style = "margin-bottom: 4px;",
+                  span(style = "color: #e41a1c; font-weight: 500;", "\u2191 ", n_up),
+                  " proteins higher in ",
+                  strong(style = "color: #e41a1c;", group_a)
+                ),
+                tags$div(
+                  span(style = "color: #377eb8; font-weight: 500;", "\u2193 ", n_down),
+                  " proteins higher in ",
+                  strong(style = "color: #377eb8;", group_b)
+                )
+              )
+            )
+          } else {
+            tags$div(style = "margin-left: 25px; font-size: 0.9em; color: #6c757d; font-style: italic;",
+              "No significant differences detected"
+            )
+          }
+        )
+      }
+
+      summary_elements[[length(summary_elements) + 1]] <- div(
+        style = "background-color: #f8f9fa; padding: 20px; border-radius: 8px;",
+        tags$h4(icon("flask"), " Differential Expression Summary"),
+        tags$hr(),
+        tags$p(style = "font-size: 0.85em; color: #6c757d; margin-bottom: 15px;",
+          "Proteins with FDR-adjusted p-value < 0.05. Arrows indicate direction of change."
+        ),
+        do.call(tagList, de_summary_list)
+      )
+    }
+
     tagList(summary_elements)
+  })
+
+  # --- AI SUMMARY (Data Overview Tab) ---
+  observeEvent(input$generate_ai_summary_overview, {
+    req(values$fit, input$contrast_selector, values$y_protein, input$user_api_key)
+
+    withProgress(message = "Generating AI Summary...", value = 0, {
+      incProgress(0.2, detail = "Gathering DE data...")
+
+      # Get volcano data for the current contrast
+      de_results_full <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
+      if (!"Protein.Group" %in% colnames(de_results_full)) {
+        de_results_full <- de_results_full %>% rownames_to_column("Protein.Group")
+      }
+
+      # Add gene symbols
+      de_results_full$Accession <- str_split_fixed(de_results_full$Protein.Group, "[; ]", 2)[,1]
+      org_db_name <- detect_organism_db(de_results_full$Protein.Group)
+
+      id_map <- tryCatch({
+        if (!requireNamespace(org_db_name, quietly = TRUE)) { BiocManager::install(org_db_name, ask = FALSE) }
+        library(org_db_name, character.only = TRUE)
+        db_obj <- get(org_db_name)
+        AnnotationDbi::select(db_obj, keys = de_results_full$Accession, columns = c("SYMBOL"), keytype = "UNIPROT") %>%
+          rename(Accession = UNIPROT, Gene = SYMBOL) %>% distinct(Accession, .keep_all = TRUE)
+      }, error = function(e) data.frame(Accession = de_results_full$Accession, Gene = de_results_full$Accession))
+
+      de_results_with_genes <- left_join(de_results_full, id_map, by = "Accession")
+      de_results_with_genes$Gene[is.na(de_results_with_genes$Gene)] <- de_results_with_genes$Accession[is.na(de_results_with_genes$Gene)]
+
+      # Filter for significant and get top 50
+      top_de_data <- de_results_with_genes %>%
+        filter(adj.P.Val < 0.05) %>%
+        arrange(adj.P.Val) %>%
+        head(50) %>%
+        dplyr::select(Gene, logFC, adj.P.Val) %>%
+        mutate(across(where(is.numeric), ~round(.x, 3)))
+
+      top_de_text <- paste(capture.output(print(as.data.frame(top_de_data))), collapse = "\n")
+
+      incProgress(0.5, detail = "Gathering stable proteins...")
+
+      stable_prots_df <- tryCatch({
+        df_res <- de_results_with_genes %>% filter(adj.P.Val < 0.05)
+        if(nrow(df_res) == 0) return(data.frame(Info="No significant proteins to assess for stability."))
+
+        protein_ids_for_cv <- df_res$Protein.Group
+        raw_exprs <- values$y_protein$E[protein_ids_for_cv, , drop = FALSE]
+        linear_exprs <- 2^raw_exprs
+        cv_list <- list()
+
+        for(g in unique(values$metadata$Group)) {
+          if (g == "") next
+          files_in_group <- values$metadata$File.Name[values$metadata$Group == g]
+          group_cols <- intersect(colnames(linear_exprs), files_in_group)
+          if (length(group_cols) > 1) {
+            group_data <- linear_exprs[, group_cols, drop = FALSE]
+            cv_list[[paste0("CV_", g)]] <- apply(group_data, 1, function(x) (sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)) * 100)
+          } else {
+            cv_list[[paste0("CV_", g)]] <- NA
+          }
+        }
+
+        cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
+        left_join(df_res, cv_df, by = "Protein.Group") %>%
+          rowwise() %>%
+          mutate(Avg_CV = mean(c_across(starts_with("CV_")), na.rm = TRUE)) %>%
+          ungroup() %>%
+          arrange(Avg_CV) %>%
+          head(3) %>%
+          dplyr::select(Gene, Avg_CV, logFC, adj.P.Val) %>%
+          mutate(across(where(is.numeric), ~round(.x, 2)))
+      }, error = function(e) data.frame(Error = "Could not calculate stable proteins."))
+
+      stable_prots_text <- paste(capture.output(print(as.data.frame(stable_prots_df))), collapse = "\n")
+
+      incProgress(0.7, detail = "Constructing prompt...")
+
+      system_prompt <- paste0(
+        "You are a senior proteomics consultant at a core facility. Write a 3-paragraph summary of the differential expression results below.\n\n",
+        "Paragraph 1: Overview of the comparison being analyzed and total number of significant proteins (FDR < 0.05).\n",
+        "Paragraph 2: Highlight the top upregulated and downregulated proteins by fold change, using gene names when available.\n",
+        "Paragraph 3: Mention the most stable differentially expressed proteins (lowest CV) as potential high-confidence biomarkers.\n\n",
+        "Use markdown formatting. Be concise and scientific."
+      )
+
+      final_prompt <- paste0(
+        system_prompt,
+        "\n\n--- DATA FOR SUMMARY ---\n\n",
+        "Comparison: ", input$contrast_selector, "\n\n",
+        "Top Significant Proteins:\n", top_de_text, "\n\n",
+        "Most Stable DE Proteins:\n", stable_prots_text
+      )
+
+      incProgress(0.8, detail = "Asking AI...")
+      ai_summary <- ask_gemini_text_chat(final_prompt, input$user_api_key, input$model_name)
+
+      # Render the summary to the output area
+      output$ai_summary_output <- renderUI({
+        div(style = "background-color: #ffffff; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px;",
+          tags$h5(icon("check-circle"), " Analysis Complete", style = "color: #28a745; margin-bottom: 15px;"),
+          HTML(markdown::markdownToHTML(text = ai_summary, fragment.only = TRUE))
+        )
+      })
+    })
   })
 
   # --- GRID VIEW & PLOT LOGIC ---
@@ -1614,29 +1981,50 @@ server <- function(input, output, session) {
       labs(title = paste("Protein:", prot_id), y = "Log2 Intensity") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
   }, height = 600) # FIXED HEIGHT
 
-  observeEvent(input$color_de, { values$color_plot_by_de <- TRUE })
-  observeEvent(input$reset_color, { values$color_plot_by_de <- FALSE })
-
   output$protein_signal_plot <- renderPlot({
     req(values$y_protein)
     avg_signal <- rowMeans(values$y_protein$E, na.rm = TRUE)
-    plot_df <- data.frame(Protein.Group = names(avg_signal), Average_Signal_Log2 = avg_signal) %>% mutate(Average_Signal_Log10 = Average_Signal_Log2 / log2(10))
-    
-    if (values$color_plot_by_de && !is.null(values$fit) && !is.null(input$contrast_selector) && nchar(input$contrast_selector) > 0) {
-      de_data_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
-      if (!"Protein.Group" %in% colnames(de_data_raw)) { de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group") } else { de_data_intermediate <- de_data_raw }
-      de_data <- de_data_intermediate %>% mutate(DE_Status = case_when(adj.P.Val < 0.05 & logFC > input$logfc_cutoff ~ "Up-regulated", adj.P.Val < 0.05 & logFC < -input$logfc_cutoff ~ "Down-regulated", TRUE ~ "Not Significant")) %>% dplyr::select(Protein.Group, DE_Status)
-      plot_df <- left_join(plot_df, de_data, by = "Protein.Group"); plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
-    } else { plot_df$DE_Status <- "Not Significant" }
-    
-    if (!is.null(values$plot_selected_proteins)) { plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins } else { plot_df$Is_Selected <- FALSE }
+    plot_df <- data.frame(Protein.Group = names(avg_signal), Average_Signal_Log2 = avg_signal) %>%
+      mutate(Average_Signal_Log10 = Average_Signal_Log2 / log2(10))
+
+    # Always show DE coloring when results are available
+    if (!is.null(values$fit) && !is.null(input$contrast_selector_signal) && nchar(input$contrast_selector_signal) > 0) {
+      de_data_raw <- topTable(values$fit, coef = input$contrast_selector_signal, number = Inf) %>% as.data.frame()
+      if (!"Protein.Group" %in% colnames(de_data_raw)) {
+        de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group")
+      } else {
+        de_data_intermediate <- de_data_raw
+      }
+      de_data <- de_data_intermediate %>%
+        mutate(DE_Status = case_when(
+          adj.P.Val < 0.05 & logFC > input$logfc_cutoff ~ "Up-regulated",
+          adj.P.Val < 0.05 & logFC < -input$logfc_cutoff ~ "Down-regulated",
+          TRUE ~ "Not Significant"
+        )) %>%
+        dplyr::select(Protein.Group, DE_Status)
+      plot_df <- left_join(plot_df, de_data, by = "Protein.Group")
+      plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
+    } else {
+      plot_df$DE_Status <- "Not Significant"
+    }
+
+    if (!is.null(values$plot_selected_proteins)) {
+      plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins
+    } else {
+      plot_df$Is_Selected <- FALSE
+    }
     selected_df <- filter(plot_df, Is_Selected)
-    
+
+    # Build plot - always use DE coloring when available
     p <- ggplot(plot_df, aes(x = reorder(Protein.Group, -Average_Signal_Log10), y = Average_Signal_Log10))
-    if (values$color_plot_by_de && !is.null(values$fit)) {
-      p <- p + geom_point(aes(color = DE_Status), size = 1.5) + scale_color_manual(name = "DE Status", values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70"))
-    } else { p <- p + geom_point(color = "cornflowerblue", size = 1.5) }
-    
+    if (!is.null(values$fit)) {
+      p <- p + geom_point(aes(color = DE_Status), size = 1.5) +
+        scale_color_manual(name = "DE Status",
+          values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70"))
+    } else {
+      p <- p + geom_point(color = "cornflowerblue", size = 1.5)
+    }
+
     p + labs(title = "Signal Distribution Across All Protein Groups", x = NULL, y = "Average Signal (Log10 Intensity)") +
       theme_minimal() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
       scale_x_discrete(expand = expansion(add = 1)) +
@@ -2021,20 +2409,50 @@ server <- function(input, output, session) {
     avg_signal <- rowMeans(values$y_protein$E, na.rm = TRUE)
     plot_df <- data.frame(Protein.Group = names(avg_signal), Average_Signal_Log2 = avg_signal) %>%
       mutate(Average_Signal_Log10 = Average_Signal_Log2 / log2(10))
-    if (values$color_plot_by_de && !is.null(values$fit) && !is.null(input$contrast_selector) && nchar(input$contrast_selector) > 0) {
-      de_data_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
-      if (!"Protein.Group" %in% colnames(de_data_raw)) { de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group") } else { de_data_intermediate <- de_data_raw }
-      de_data <- de_data_intermediate %>% mutate(DE_Status = case_when(adj.P.Val < 0.05 & logFC > input$logfc_cutoff ~ "Up-regulated", adj.P.Val < 0.05 & logFC < -input$logfc_cutoff ~ "Down-regulated", TRUE ~ "Not Significant")) %>% dplyr::select(Protein.Group, DE_Status)
-      plot_df <- left_join(plot_df, de_data, by = "Protein.Group"); plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
-    } else { plot_df$DE_Status <- "Not Significant" }
-    if (!is.null(values$plot_selected_proteins)) { plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins } else { plot_df$Is_Selected <- FALSE }
+
+    # Always show DE coloring when results are available
+    if (!is.null(values$fit) && !is.null(input$contrast_selector_signal) && nchar(input$contrast_selector_signal) > 0) {
+      de_data_raw <- topTable(values$fit, coef = input$contrast_selector_signal, number = Inf) %>% as.data.frame()
+      if (!"Protein.Group" %in% colnames(de_data_raw)) {
+        de_data_intermediate <- de_data_raw %>% rownames_to_column("Protein.Group")
+      } else {
+        de_data_intermediate <- de_data_raw
+      }
+      de_data <- de_data_intermediate %>%
+        mutate(DE_Status = case_when(
+          adj.P.Val < 0.05 & logFC > input$logfc_cutoff ~ "Up-regulated",
+          adj.P.Val < 0.05 & logFC < -input$logfc_cutoff ~ "Down-regulated",
+          TRUE ~ "Not Significant"
+        )) %>%
+        dplyr::select(Protein.Group, DE_Status)
+      plot_df <- left_join(plot_df, de_data, by = "Protein.Group")
+      plot_df$DE_Status[is.na(plot_df$DE_Status)] <- "Not Significant"
+    } else {
+      plot_df$DE_Status <- "Not Significant"
+    }
+
+    if (!is.null(values$plot_selected_proteins)) {
+      plot_df$Is_Selected <- plot_df$Protein.Group %in% values$plot_selected_proteins
+    } else {
+      plot_df$Is_Selected <- FALSE
+    }
     selected_df <- filter(plot_df, Is_Selected)
+
+    # Build plot - always use DE coloring when available
     p <- ggplot(plot_df, aes(x = reorder(Protein.Group, -Average_Signal_Log10), y = Average_Signal_Log10))
-    if (values$color_plot_by_de && !is.null(values$fit)) {
-      p <- p + geom_point(aes(color = DE_Status), size = 1.5) + scale_color_manual(name = "DE Status", values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70"))
-    } else { p <- p + geom_point(color = "cornflowerblue", size = 1.5) }
+    if (!is.null(values$fit)) {
+      p <- p + geom_point(aes(color = DE_Status), size = 1.5) +
+        scale_color_manual(name = "DE Status",
+          values = c("Up-regulated" = "#e41a1c", "Down-regulated" = "#377eb8", "Not Significant" = "grey70"))
+    } else {
+      p <- p + geom_point(color = "cornflowerblue", size = 1.5)
+    }
+
     p + labs(title = "Signal Distribution Across All Protein Groups", x = NULL, y = "Average Signal (Log10 Intensity)") +
-      theme_bw() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+      theme_bw() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+      scale_x_discrete(expand = expansion(add = 1)) +
+      geom_point(data = selected_df, color = "black", shape = 1, size = 4, stroke = 1) +
+      geom_text_repel(data = selected_df, aes(label = Protein.Group), size = 4, max.overlaps = 20)
   }, height = 700)
 
   # --- 2. DPC Fit (QC Plots) ---
@@ -2085,7 +2503,237 @@ server <- function(input, output, session) {
     ggplotly(p, tooltip = "text")
   })
 
-  # --- 5. Volcano Plot (DE Dashboard) ---
+  # --- 5. P-value Distribution Histogram ---
+  # Reactive to assess p-value distribution health
+  assess_pvalue_health <- reactive({
+    req(values$fit, input$contrast_selector_pvalue)
+
+    # Get p-values
+    de_results <- topTable(values$fit, coef = input$contrast_selector_pvalue, number = Inf)
+    pvalues <- de_results$P.Value
+
+    n_proteins <- length(pvalues)
+
+    # Bin the p-values into 10 bins
+    breaks <- seq(0, 1, by = 0.1)
+    hist_counts <- hist(pvalues, breaks = breaks, plot = FALSE)$counts
+
+    # Expected count per bin if uniform
+    expected_per_bin <- n_proteins / length(hist_counts)
+
+    # Calculate ratios for different regions
+    low_pval_ratio <- sum(pvalues < 0.05) / (n_proteins * 0.05)  # Ratio vs expected 5%
+    mid_pval_ratio <- sum(pvalues >= 0.3 & pvalues <= 0.7) / (n_proteins * 0.4)  # Ratio vs expected 40%
+
+    # Detect patterns
+    has_spike <- low_pval_ratio > 2  # Spike at zero if > 2x expected
+    has_inflation <- mid_pval_ratio > 1.3  # Inflation if mid-range > 1.3x expected
+    has_depletion <- low_pval_ratio < 0.5  # Depletion if < 0.5x expected
+
+    # U-shaped: high at both ends
+    first_bin_ratio <- hist_counts[1] / expected_per_bin
+    last_bin_ratio <- hist_counts[length(hist_counts)] / expected_per_bin
+    is_u_shaped <- (first_bin_ratio > 1.5 && last_bin_ratio > 1.5)
+
+    # Completely uniform: no spike, no inflation
+    is_uniform <- !has_spike && !has_inflation && (low_pval_ratio > 0.8 && low_pval_ratio < 1.2)
+
+    # Determine overall status
+    if (is_u_shaped) {
+      status <- "u_shaped"
+    } else if (has_inflation) {
+      status <- "inflation"
+    } else if (has_depletion && !has_spike) {
+      status <- "low_power"
+    } else if (is_uniform) {
+      status <- "uniform"
+    } else if (has_spike) {
+      status <- "healthy"
+    } else {
+      status <- "unknown"
+    }
+
+    list(
+      status = status,
+      n_proteins = n_proteins,
+      n_significant = sum(de_results$adj.P.Val < 0.05),
+      low_pval_ratio = low_pval_ratio,
+      mid_pval_ratio = mid_pval_ratio,
+      has_spike = has_spike,
+      has_inflation = has_inflation,
+      has_depletion = has_depletion,
+      is_u_shaped = is_u_shaped
+    )
+  })
+
+  # Render contextual guidance banner
+  output$pvalue_guidance <- renderUI({
+    health <- assess_pvalue_health()
+
+    if (health$status == "healthy") {
+      # Green success banner
+      div(class = "alert alert-success", role = "alert",
+        icon("check-circle"),
+        strong(" P-value distribution looks healthy. "),
+        sprintf("Good spike near p=0 (%d significant proteins after FDR correction). ", health$n_significant),
+        "This indicates genuine differential expression with proper statistical power."
+      )
+
+    } else if (health$status == "inflation") {
+      # Yellow warning - p-value inflation
+      div(class = "alert alert-warning", role = "alert",
+        icon("exclamation-triangle"),
+        strong(" Possible p-value inflation detected. "),
+        "Too many intermediate p-values (0.3-0.7) relative to expectation. This may indicate:",
+        tags$ul(
+          tags$li("Unmodeled batch effects → Add batch covariate in Assign Groups tab"),
+          tags$li("Variance heterogeneity → Check MDS Plot for outliers"),
+          tags$li("Small sample size → Consider adding biological replicates")
+        ),
+        "If this pattern persists, consider checking the Normalization Diagnostic tab."
+      )
+
+    } else if (health$status == "low_power") {
+      # Yellow warning - low power
+      div(class = "alert alert-warning", role = "alert",
+        icon("battery-quarter"),
+        strong(" Low statistical power detected. "),
+        sprintf("Fewer small p-values than expected (%d significant proteins). ", health$n_significant),
+        "Possible causes:",
+        tags$ul(
+          tags$li("Small sample size → Increase biological replicates if possible"),
+          tags$li("High biological variability → Check CV Distribution tab"),
+          tags$li("Effect sizes too small to detect with current sample size"),
+          tags$li("Over-conservative FDR correction → Consider less stringent threshold")
+        )
+      )
+
+    } else if (health$status == "u_shaped") {
+      # Red danger - U-shaped distribution
+      div(class = "alert alert-danger", role = "alert",
+        icon("times-circle"),
+        strong(" Statistical model issue detected. "),
+        "U-shaped p-value distribution (enrichment at both p~0 and p~1) suggests problems with the statistical model or data quality. ",
+        "Recommended actions:",
+        tags$ul(
+          tags$li("Check Normalization Diagnostic - samples may not be properly normalized"),
+          tags$li("Review MDS Plot for outlier samples or batch structure"),
+          tags$li("Verify group assignments are correct"),
+          tags$li("Consider whether this comparison is biologically appropriate")
+        )
+      )
+
+    } else if (health$status == "uniform") {
+      # Blue info - no signal
+      div(class = "alert alert-info", role = "alert",
+        icon("info-circle"),
+        strong(" No differential expression signal detected. "),
+        sprintf("P-values are uniformly distributed (only %d proteins pass FDR < 0.05). ", health$n_significant),
+        "This could mean:",
+        tags$ul(
+          tags$li("Groups are truly similar (no biological difference)"),
+          tags$li("Test lacks power to detect existing differences"),
+          tags$li("Technical variation masks biological signal")
+        ),
+        "Consider checking QC plots to rule out technical issues."
+      )
+
+    } else {
+      # Default blue info banner
+      div(style = "background-color: #e7f3ff; padding: 12px; border-radius: 5px;",
+        icon("info-circle"),
+        strong(" P-value Diagnostic: "),
+        "This histogram shows the distribution of raw p-values from your differential expression test. ",
+        "A healthy analysis shows mostly uniform distribution (flat histogram) with enrichment near p=0 for true positives."
+      )
+    }
+  })
+
+  output$pvalue_histogram <- renderPlot({
+    req(values$fit, input$contrast_selector_pvalue)
+
+    # Get all p-values for the current contrast
+    de_results <- topTable(values$fit, coef = input$contrast_selector_pvalue, number = Inf)
+    pvalues <- de_results$P.Value
+
+    # Calculate expected uniform distribution
+    n_proteins <- length(pvalues)
+    n_bins <- 30
+    expected_per_bin <- n_proteins / n_bins
+
+    # Create histogram data
+    hist_data <- data.frame(PValue = pvalues)
+
+    # Create the plot
+    ggplot(hist_data, aes(x = PValue)) +
+      geom_histogram(bins = n_bins, fill = "#4A90E2", color = "white", alpha = 0.7) +
+      geom_hline(yintercept = expected_per_bin, linetype = "dashed", color = "red", size = 1) +
+      annotate("text", x = 0.75, y = expected_per_bin * 1.1,
+               label = "Expected under null (uniform)",
+               color = "red", size = 3.5, fontface = "italic") +
+      labs(
+        title = paste0("P-value Distribution (", nrow(de_results), " proteins tested)"),
+        subtitle = paste0("Comparison: ", input$contrast_selector_pvalue),
+        x = "P-value",
+        y = "Number of Proteins"
+      ) +
+      theme_bw(base_size = 14) +
+      theme(
+        plot.title = element_text(face = "bold", size = 16),
+        plot.subtitle = element_text(color = "gray40", size = 11),
+        panel.grid.minor = element_blank()
+      ) +
+      scale_x_continuous(breaks = seq(0, 1, 0.1), limits = c(0, 1))
+  })
+
+  # Fullscreen modal for p-value histogram
+  observeEvent(input$fullscreen_pvalue_hist, {
+    req(values$fit, input$contrast_selector_pvalue)
+
+    # Get all p-values for the current contrast
+    de_results <- topTable(values$fit, coef = input$contrast_selector_pvalue, number = Inf)
+    pvalues <- de_results$P.Value
+
+    # Calculate expected uniform distribution
+    n_proteins <- length(pvalues)
+    n_bins <- 40  # More bins for fullscreen
+    expected_per_bin <- n_proteins / n_bins
+
+    # Create histogram data
+    hist_data <- data.frame(PValue = pvalues)
+
+    # Create enhanced plot for fullscreen
+    p <- ggplot(hist_data, aes(x = PValue)) +
+      geom_histogram(bins = n_bins, fill = "#4A90E2", color = "white", alpha = 0.7) +
+      geom_hline(yintercept = expected_per_bin, linetype = "dashed", color = "red", size = 1.2) +
+      annotate("text", x = 0.75, y = expected_per_bin * 1.15,
+               label = "Expected uniform distribution",
+               color = "red", size = 4, fontface = "italic") +
+      labs(
+        title = paste0("P-value Distribution: ", input$contrast_selector_pvalue),
+        subtitle = paste0(nrow(de_results), " proteins tested | ",
+                         sum(de_results$adj.P.Val < 0.05), " significant after FDR correction"),
+        x = "Raw P-value",
+        y = "Number of Proteins"
+      ) +
+      theme_bw(base_size = 16) +
+      theme(
+        plot.title = element_text(face = "bold", size = 18),
+        plot.subtitle = element_text(color = "gray40", size = 13),
+        panel.grid.minor = element_blank()
+      ) +
+      scale_x_continuous(breaks = seq(0, 1, 0.1), limits = c(0, 1))
+
+    showModal(modalDialog(
+      title = "P-value Distribution - Fullscreen View",
+      renderPlot({ p }, height = 700, width = 1000),
+      size = "xl",
+      easyClose = TRUE,
+      footer = modalButton("Close")
+    ))
+  })
+
+  # --- 6. Volcano Plot (DE Dashboard) ---
   observeEvent(input$fullscreen_volcano, {
     showModal(modalDialog(
       title = "Volcano Plot - Fullscreen View",
@@ -2094,15 +2742,46 @@ server <- function(input, output, session) {
     ))
   })
   output$volcano_plot_fs <- renderPlotly({
-    df <- volcano_data(); cols <- c("Not Sig" = "grey", "Significant" = "red")
+    df <- volcano_data()
+    cols <- c("Not Sig" = "grey", "Significant" = "red")
+
     p <- ggplot(df, aes(x = logFC, y = -log10(P.Value), text = paste("Protein:", Protein.Group), key = Protein.Group, color = Significance)) +
-      geom_point(alpha = 0.6) + scale_color_manual(values = cols) +
-      geom_vline(xintercept = c(-input$logfc_cutoff, input$logfc_cutoff), linetype = "dashed") +
-      geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
-      theme_minimal() + labs(y = "-log10(P-Value)")
+      geom_point(alpha = 0.6) +
+      scale_color_manual(values = cols) +
+
+      # Threshold lines with color
+      geom_vline(xintercept = c(-input$logfc_cutoff, input$logfc_cutoff),
+                 linetype = "dashed", color = "#FFA500", size = 0.8) +
+      geom_hline(yintercept = -log10(0.05),
+                 linetype = "dashed", color = "#4169E1", size = 0.8) +
+
+      theme_minimal() +
+      labs(y = "-log10(P-Value)", title = paste0("Volcano Plot: ", input$contrast_selector))
+
     df_sel <- df %>% filter(Selected == "Yes")
-    if (nrow(df_sel) > 0) p <- p + geom_point(data = df_sel, aes(x = logFC, y = -log10(P.Value)), shape = 21, size = 4, fill = NA, color = "blue", stroke = 2)
-    ggplotly(p, tooltip = "text")
+    if (nrow(df_sel) > 0) {
+      p <- p + geom_point(data = df_sel, aes(x = logFC, y = -log10(P.Value)),
+                         shape = 21, size = 4, fill = NA, color = "blue", stroke = 2)
+    }
+
+    # Convert to plotly and add annotations using plotly's native system
+    ggplotly(p, tooltip = "text") %>%
+      layout(
+        annotations = list(
+          # Significance criteria box text (using plotly annotations for better positioning)
+          list(x = 0.02, y = 0.98, xref = "paper", yref = "paper", xanchor = "left", yanchor = "top",
+               text = "<b>Significant if:</b>", showarrow = FALSE, font = list(size = 14)),
+          list(x = 0.02, y = 0.93, xref = "paper", yref = "paper", xanchor = "left", yanchor = "top",
+               text = paste0("• FDR-adj. p < 0.05<br>• |log2FC| > ", round(input$logfc_cutoff, 2)),
+               showarrow = FALSE, font = list(size = 12, color = "#555555"))
+        ),
+        shapes = list(
+          # White background box for legend
+          list(type = "rect", x0 = 0.01, x1 = 0.28, y0 = 0.88, y1 = 0.99,
+               xref = "paper", yref = "paper", fillcolor = "white", opacity = 0.85,
+               line = list(color = "#333333", width = 1))
+        )
+      )
   })
 
   # --- 6. Heatmap (DE Dashboard) ---
@@ -2218,39 +2897,6 @@ server <- function(input, output, session) {
     datatable(df_display, selection = "multiple", options = list(pageLength = 10, scrollX = TRUE), escape = FALSE, rownames = FALSE)
   })
 
-  observeEvent(input$generate_ai_summary, {
-    req(values$fit, input$contrast_selector, values$y_protein, input$user_api_key)
-    withProgress(message = "Generating AI Summary...", value = 0, {
-      incProgress(0.2, detail = "Gathering DE data...")
-      top_de_data <- volcano_data() %>% filter(Significance != "Not Significant") %>% arrange(adj.P.Val) %>% head(50) %>% dplyr::select(Gene, logFC, adj.P.Val) %>% mutate(across(where(is.numeric), ~round(.x, 3)))
-      top_de_text <- paste(capture.output(print(as.data.frame(top_de_data))), collapse = "\n")
-      
-      incProgress(0.5, detail = "Gathering stable proteins...")
-      stable_prots_df <- tryCatch({
-        df_res_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame() %>% filter(adj.P.Val < 0.05)
-        if (!"Protein.Group" %in% colnames(df_res_raw)) { df_res <- df_res_raw %>% rownames_to_column("Protein.Group") } else { df_res <- df_res_raw }
-        if(nrow(df_res) == 0) return(data.frame(Info="No significant proteins to assess for stability."))
-        protein_ids_for_cv <- df_res$Protein.Group; raw_exprs <- values$y_protein$E[protein_ids_for_cv, , drop = FALSE]; linear_exprs <- 2^raw_exprs; cv_list <- list()
-        for(g in unique(values$metadata$Group)) {
-          if (g == "") next
-          files_in_group <- values$metadata$File.Name[values$metadata$Group == g]; group_cols <- intersect(colnames(linear_exprs), files_in_group)
-          if (length(group_cols) > 1) { group_data <- linear_exprs[, group_cols, drop = FALSE]; cv_list[[paste0("CV_", g)]] <- apply(group_data, 1, function(x) (sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)) * 100)
-          } else { cv_list[[paste0("CV_", g)]] <- NA }
-        }
-        cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
-        left_join(df_res, cv_df, by = "Protein.Group") %>% rowwise() %>% mutate(Avg_CV = mean(c_across(starts_with("CV_")), na.rm = TRUE)) %>% ungroup() %>% arrange(Avg_CV) %>% head(3) %>% dplyr::select(Protein.Group, Avg_CV, logFC, adj.P.Val) %>% mutate(across(where(is.numeric), ~round(.x, 2)))
-      }, error = function(e) data.frame(Error = "Could not calculate stable proteins."))
-      stable_prots_text <- paste(capture.output(print(as.data.frame(stable_prots_df))), collapse = "\n")
-
-      incProgress(0.7, detail = "Constructing prompt...")
-      system_prompt <- "You are a senior proteomics consultant at a core facility. Write a 3-paragraph summary..."
-      final_prompt <- paste0(system_prompt, "\n\n--- DATA FOR SUMMARY ---\n\n...", top_de_text, "...", stable_prots_text, "...")
-      incProgress(0.8, detail = "Asking AI...")
-      ai_summary <- ask_gemini_text_chat(final_prompt, input$user_api_key, input$model_name)
-      showModal(modalDialog(title = "AI-Generated Summary", HTML(markdown::markdownToHTML(text = ai_summary, fragment.only = TRUE)), easyClose = TRUE, footer = modalButton("Close")))
-    })
-  })
-  
   output$heatmap_plot <- renderPlot({
     req(values$fit, values$y_protein, input$contrast_selector)
     df_volc <- volcano_data(); prot_ids <- NULL
@@ -2277,6 +2923,171 @@ server <- function(input, output, session) {
     cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
     df_final <- left_join(df_res, cv_df, by = "Protein.Group") %>% rowwise() %>% mutate(Avg_CV = mean(c_across(starts_with("CV_")), na.rm = TRUE)) %>% ungroup() %>% arrange(Avg_CV) %>% mutate(Stability = ifelse(Avg_CV < 20, "High", "Low")) %>% dplyr::select(Protein.Group, Stability, Avg_CV, logFC, adj.P.Val, starts_with("CV_")) %>% mutate(across(where(is.numeric), ~round(.x, 2)))
     datatable(df_final, options = list(pageLength = 15, scrollX = TRUE), rownames = FALSE)
+  })
+
+  # CV Histogram: Distribution of CV values by group
+  output$cv_histogram <- renderPlot({
+    req(values$fit, values$y_protein, input$contrast_selector, values$metadata)
+
+    # Get significant proteins
+    df_res_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>%
+      as.data.frame() %>%
+      filter(adj.P.Val < 0.05)
+    if (!"Protein.Group" %in% colnames(df_res_raw)) {
+      df_res <- df_res_raw %>% rownames_to_column("Protein.Group")
+    } else {
+      df_res <- df_res_raw
+    }
+    if(nrow(df_res) == 0) {
+      # Show message if no significant proteins
+      plot.new()
+      text(0.5, 0.5, "No significant proteins found.\nAdjust significance threshold or check data.",
+           cex = 1.2, col = "gray50")
+      return()
+    }
+
+    # Calculate CV for each group
+    protein_ids_for_cv <- df_res$Protein.Group
+    raw_exprs <- values$y_protein$E[protein_ids_for_cv, , drop = FALSE]
+    linear_exprs <- 2^raw_exprs
+    cv_list <- list()
+
+    for(g in unique(values$metadata$Group)) {
+      if (g == "") next
+      files_in_group <- values$metadata$File.Name[values$metadata$Group == g]
+      group_cols <- intersect(colnames(linear_exprs), files_in_group)
+
+      if (length(group_cols) > 1) {
+        group_data <- linear_exprs[, group_cols, drop = FALSE]
+        cv_list[[paste0("CV_", g)]] <- apply(group_data, 1, function(x) {
+          (sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)) * 100
+        })
+      } else {
+        cv_list[[paste0("CV_", g)]] <- NA
+      }
+    }
+
+    # Convert to long format for ggplot
+    cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
+    cv_long <- cv_df %>%
+      pivot_longer(cols = starts_with("CV_"),
+                   names_to = "Group",
+                   values_to = "CV") %>%
+      mutate(Group = gsub("CV_", "", Group)) %>%
+      filter(!is.na(CV))
+
+    # Calculate averages for each group
+    cv_averages <- cv_long %>%
+      group_by(Group) %>%
+      summarise(Avg_CV = mean(CV, na.rm = TRUE), .groups = 'drop')
+
+    # Create histogram with facets
+    ggplot(cv_long, aes(x = CV)) +
+      geom_histogram(aes(fill = Group), bins = 30, alpha = 0.7, color = "white") +
+      geom_vline(data = cv_averages, aes(xintercept = Avg_CV, color = Group),
+                 linetype = "dashed", size = 1.2) +
+      geom_text(data = cv_averages,
+                aes(x = Avg_CV, y = Inf, label = paste0("Avg: ", round(Avg_CV, 1), "%")),
+                vjust = 1.5, hjust = -0.1, size = 3.5, fontface = "bold") +
+      facet_wrap(~ Group, ncol = 2, scales = "free_y") +
+      labs(title = paste0("CV Distribution by Group (", nrow(df_res), " significant proteins)"),
+           subtitle = "Dashed line shows average CV for each group",
+           x = "Coefficient of Variation (%)",
+           y = "Number of Proteins") +
+      theme_bw(base_size = 14) +
+      theme(
+        legend.position = "none",
+        strip.background = element_rect(fill = "#667eea", color = NA),
+        strip.text = element_text(color = "white", face = "bold", size = 12),
+        plot.title = element_text(face = "bold", size = 16),
+        plot.subtitle = element_text(color = "gray40", size = 11),
+        panel.grid.minor = element_blank()
+      )
+  })
+
+  # Fullscreen modal for CV histogram
+  observeEvent(input$fullscreen_cv_hist, {
+    req(values$fit, values$y_protein, input$contrast_selector, values$metadata)
+
+    # Get significant proteins
+    df_res_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>%
+      as.data.frame() %>%
+      filter(adj.P.Val < 0.05)
+    if (!"Protein.Group" %in% colnames(df_res_raw)) {
+      df_res <- df_res_raw %>% rownames_to_column("Protein.Group")
+    } else {
+      df_res <- df_res_raw
+    }
+    if(nrow(df_res) == 0) {
+      showNotification("No significant proteins found for CV analysis.", type = "warning")
+      return()
+    }
+
+    # Calculate CV for each group
+    protein_ids_for_cv <- df_res$Protein.Group
+    raw_exprs <- values$y_protein$E[protein_ids_for_cv, , drop = FALSE]
+    linear_exprs <- 2^raw_exprs
+    cv_list <- list()
+
+    for(g in unique(values$metadata$Group)) {
+      if (g == "") next
+      files_in_group <- values$metadata$File.Name[values$metadata$Group == g]
+      group_cols <- intersect(colnames(linear_exprs), files_in_group)
+
+      if (length(group_cols) > 1) {
+        group_data <- linear_exprs[, group_cols, drop = FALSE]
+        cv_list[[paste0("CV_", g)]] <- apply(group_data, 1, function(x) {
+          (sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)) * 100
+        })
+      } else {
+        cv_list[[paste0("CV_", g)]] <- NA
+      }
+    }
+
+    # Convert to long format for ggplot
+    cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
+    cv_long <- cv_df %>%
+      pivot_longer(cols = starts_with("CV_"),
+                   names_to = "Group",
+                   values_to = "CV") %>%
+      mutate(Group = gsub("CV_", "", Group)) %>%
+      filter(!is.na(CV))
+
+    # Calculate averages for each group
+    cv_averages <- cv_long %>%
+      group_by(Group) %>%
+      summarise(Avg_CV = mean(CV, na.rm = TRUE), .groups = 'drop')
+
+    # Create fullscreen histogram
+    p <- ggplot(cv_long, aes(x = CV)) +
+      geom_histogram(aes(fill = Group), bins = 40, alpha = 0.7, color = "white") +
+      geom_vline(data = cv_averages, aes(xintercept = Avg_CV, color = Group),
+                 linetype = "dashed", size = 1.5) +
+      geom_text(data = cv_averages,
+                aes(x = Avg_CV, y = Inf, label = paste0("Avg: ", round(Avg_CV, 1), "%")),
+                vjust = 1.5, hjust = -0.1, size = 4, fontface = "bold") +
+      facet_wrap(~ Group, ncol = 2, scales = "free_y") +
+      labs(title = paste0("CV Distribution by Group (", nrow(df_res), " significant proteins)"),
+           subtitle = "Dashed line shows average CV for each group. Lower CV = more stable/reproducible biomarker",
+           x = "Coefficient of Variation (%)",
+           y = "Number of Proteins") +
+      theme_bw(base_size = 16) +
+      theme(
+        legend.position = "none",
+        strip.background = element_rect(fill = "#667eea", color = NA),
+        strip.text = element_text(color = "white", face = "bold", size = 14),
+        plot.title = element_text(face = "bold", size = 18),
+        plot.subtitle = element_text(color = "gray40", size = 12),
+        panel.grid.minor = element_blank()
+      )
+
+    showModal(modalDialog(
+      title = "CV Distribution - Fullscreen View",
+      renderPlot({ p }, height = 700, width = 1000),
+      size = "xl",
+      easyClose = TRUE,
+      footer = modalButton("Close")
+    ))
   })
   
   output$reproducible_code <- renderText({
@@ -2416,8 +3227,13 @@ server <- function(input, output, session) {
       # Restore UI state: update contrast choices from the fit object
       if (!is.null(values$fit)) {
         contrast_names <- colnames(values$fit$contrasts)
-        updateSelectInput(session, "contrast_selector", choices = contrast_names,
-                          selected = session_data$contrast %||% contrast_names[1])
+        selected_contrast <- session_data$contrast %||% contrast_names[1]
+
+        # Update all four comparison selectors
+        updateSelectInput(session, "contrast_selector", choices = contrast_names, selected = selected_contrast)
+        updateSelectInput(session, "contrast_selector_signal", choices = contrast_names, selected = selected_contrast)
+        updateSelectInput(session, "contrast_selector_grid", choices = contrast_names, selected = selected_contrast)
+        updateSelectInput(session, "contrast_selector_pvalue", choices = contrast_names, selected = selected_contrast)
       }
       if (!is.null(session_data$logfc_cutoff)) {
         updateSliderInput(session, "logfc_cutoff", value = session_data$logfc_cutoff)
@@ -2659,8 +3475,8 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       # Get current table data (including any edits)
-      template_data <- if (!is.null(input$hot_metadata_modal)) {
-        hot_to_r(input$hot_metadata_modal)
+      template_data <- if (!is.null(input$hot_metadata)) {
+        hot_to_r(input$hot_metadata)
       } else {
         values$metadata
       }
@@ -2710,33 +3526,58 @@ server <- function(input, output, session) {
       showNotification("Template imported successfully!", type = "message", duration = 3)
       removeModal()  # Close import dialog
 
-      # Reopen assign groups modal to show imported data
-      Sys.sleep(0.5)  # Brief delay for UX
-      click("open_setup")
+      # Navigate to Assign Groups sub-tab to show imported data
+      nav_select("main_tabs", "Data Overview")
+      nav_select("data_overview_tabs", "Assign Groups & Run")
 
     }, error = function(e) {
       showNotification(paste("Error importing template:", e$message), type = "error", duration = 10)
     })
   })
 
-  # Display current comparison prominently
-  output$current_comparison_display <- renderUI({
-    req(input$contrast_selector)
-    span(input$contrast_selector, style="font-size: 1.1em;")
-  })
-
   output$volcano_plot_interactive <- renderPlotly({
-    df <- volcano_data(); cols <- c("Not Sig" = "grey", "Significant" = "red")
+    df <- volcano_data()
+    cols <- c("Not Sig" = "grey", "Significant" = "red")
+
     # Use non-adjusted P.Value for y-axis, but color by adjusted p-value significance
     p <- ggplot(df, aes(x = logFC, y = -log10(P.Value), text = paste("Protein:", Protein.Group), key = Protein.Group, color = Significance)) +
-      geom_point(alpha = 0.6) + scale_color_manual(values = cols) +
-      geom_vline(xintercept = c(-input$logfc_cutoff, input$logfc_cutoff), linetype="dashed") +
-      geom_hline(yintercept = -log10(0.05), linetype="dashed") +
+      geom_point(alpha = 0.6) +
+      scale_color_manual(values = cols) +
+
+      # Threshold lines with color
+      geom_vline(xintercept = c(-input$logfc_cutoff, input$logfc_cutoff),
+                 linetype = "dashed", color = "#FFA500", size = 0.7) +
+      geom_hline(yintercept = -log10(0.05),
+                 linetype = "dashed", color = "#4169E1", size = 0.7) +
+
       theme_minimal() +
-      labs(y = "-log10(P-Value)")
+      labs(y = "-log10(P-Value)", title = paste0("Volcano Plot: ", input$contrast_selector))
+
     df_sel <- df %>% filter(Selected == "Yes")
-    if (nrow(df_sel) > 0) p <- p + geom_point(data = df_sel, aes(x=logFC, y=-log10(P.Value)), shape=21, size=4, fill=NA, color="blue", stroke=2)
-    ggplotly(p, tooltip = "text", source = "volcano_source") %>% layout(dragmode = "select")
+    if (nrow(df_sel) > 0) {
+      p <- p + geom_point(data = df_sel, aes(x = logFC, y = -log10(P.Value)),
+                         shape = 21, size = 4, fill = NA, color = "blue", stroke = 2)
+    }
+
+    # Convert to plotly and add annotations using plotly's native system
+    ggplotly(p, tooltip = "text", source = "volcano_source") %>%
+      layout(
+        dragmode = "select",
+        annotations = list(
+          # Significance criteria box text (using plotly annotations for better positioning)
+          list(x = 0.02, y = 0.98, xref = "paper", yref = "paper", xanchor = "left", yanchor = "top",
+               text = "<b>Significant if:</b>", showarrow = FALSE, font = list(size = 12)),
+          list(x = 0.02, y = 0.93, xref = "paper", yref = "paper", xanchor = "left", yanchor = "top",
+               text = paste0("• FDR-adj. p < 0.05<br>• |log2FC| > ", round(input$logfc_cutoff, 2)),
+               showarrow = FALSE, font = list(size = 11, color = "#555555"))
+        ),
+        shapes = list(
+          # White background box for legend
+          list(type = "rect", x0 = 0.01, x1 = 0.28, y0 = 0.88, y1 = 0.99,
+               xref = "paper", yref = "paper", fillcolor = "white", opacity = 0.85,
+               line = list(color = "#333333", width = 1))
+        )
+      )
   })
   
   observeEvent(event_data("plotly_selected", source = "volcano_source"), { select_data <- event_data("plotly_selected", source = "volcano_source"); if (!is.null(select_data)) values$plot_selected_proteins <- select_data$key })

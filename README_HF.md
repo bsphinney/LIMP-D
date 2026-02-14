@@ -22,6 +22,17 @@ tags:
 
 An interactive R Shiny application for differential expression analysis of DIA-NN proteomics data. Built on **Limpa** and **Limma** for robust statistics, with **Google Gemini AI** integration.
 
+## ✨ What's New in v2.1
+
+**Major UI/UX Enhancements** (February 2026):
+- 🎯 **Four-Way Selector Sync** - All comparison selectors automatically synchronized
+- 📊 **Enhanced Dataset Summary** - DE counts with directional arrows (↑↓)
+- 🔬 **P-value Diagnostics** - Automated pattern detection with color-coded guidance
+- 📈 **CV Distribution** - Visual protein variability per group
+- 🤖 **AI Summary Tab** - Dedicated sub-tab with inline display
+- 🌋 **Volcano Annotations** - FDR/logFC thresholds with legend box
+- 🎨 **Responsive Design** - Viewport-relative plot heights for all screens
+
 ## 🚀 Features
 
 ### 📊 Interactive Analysis

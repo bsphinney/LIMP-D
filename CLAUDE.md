@@ -1,7 +1,11 @@
 # DE-LIMP Project Context for Claude
 
 ## Working Preferences
-Proactively suggest updates to this file when new patterns, gotchas, or architectural decisions emerge.
+- **ALWAYS update this file** after implementing changes to the codebase
+- Update the "Recent Changes" section with detailed entries including line numbers and functionality
+- Update other relevant sections (Main Tab Structure, Key Patterns, TODO list, etc.) as needed
+- **When this file exceeds ~400 lines**, proactively recommend using the `claude-md-management:claude-md-improver` skill to audit and refactor
+- Proactively suggest updates to this file when new patterns, gotchas, or architectural decisions emerge
 
 ## Project Overview
 DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package for differential expression analysis of DIA-NN data.
@@ -46,11 +50,11 @@ Line 2810:      shinyApp(ui, server)
 ```
 
 ### Main Tab Structure
-- **Data Overview** - 4 sub-tabs: Signal Distribution, Dataset Summary, Group QC Summary, Expression Grid
+- **Data Overview** - 6 sub-tabs: **Assign Groups & Run**, Signal Distribution, Dataset Summary, Group QC Summary, Expression Grid, **AI Summary**
 - **QC Trends** - 4 sub-tabs: Precursors, Proteins, MS1 Signal, Stats Table
-- **QC Plots** - 4 sub-tabs: Normalization Diagnostic, DPC Fit, MDS Plot, Group Distribution
-- **DE Dashboard** - Volcano plot, results table, violin plots, comparison banner
-- **Consistent DE** - Cross-comparison consistency analysis
+- **QC Plots** - 5 sub-tabs: Normalization Diagnostic, DPC Fit, MDS Plot, Group Distribution, P-value Distribution
+- **DE Dashboard** - Volcano plot, results table, violin plots, interactive comparison selector
+- **Consistent DE** - 2 sub-tabs: High-Consistency Table (ranked by %CV), CV Distribution (histogram by group)
 - **Reproducibility** - Code Log + Methodology sub-tabs
 - **Gene Set Enrichment** - Dot Plot, Enrichment Map, Ridgeplot, Results Table
 - **Data Chat** - AI-powered analysis (Google Gemini API)
@@ -72,6 +76,12 @@ Line 2810:      shinyApp(ui, server)
 ### Selection System
 - Volcano plot click/box-select and table row selection both update `values$plot_selected_proteins`
 - Bidirectional sync for highlighting
+
+### Comparison Selector Synchronization
+- **Four synchronized selectors**: `contrast_selector` (DE Dashboard), `contrast_selector_signal` (Signal Distribution), `contrast_selector_grid` (Expression Grid), `contrast_selector_pvalue` (P-value Distribution)
+- **Bidirectional sync**: Changing any selector updates all others automatically
+- **Population**: All four selectors populated when pipeline runs and when session loads
+- **Independence**: Each plot uses its own dedicated selector (not the main one) to avoid reactive conflicts
 
 ### AI Chat Feature
 - Uses Google Gemini API, uploads top 800 proteins via File API
@@ -174,6 +184,7 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 - Multi-plot sections use `navset_card_tab` sub-tabs instead of dropdowns or modals
 - DE Dashboard uses responsive grid (`.de-dashboard-grid`) that stacks at <1200px
 - Fullscreen modals available as enhancement on all plot panels
+- **CRITICAL bslib component issue**: `card()` and `card_body()` components don't render when placed at top level inside `nav_panel()`. Use plain `div()` elements with inline CSS instead for top-level content in nav panels. Cards work fine in the main body content, just not at the very top of a nav_panel.
 
 ## Common Issues
 
@@ -185,19 +196,224 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 | "limpa not found" / R version error | Need R 4.5+ from https://cloud.r-project.org/ |
 | "Package cannot be unloaded" during install | Restart R session, packages install before loading |
 | Selections disappear after clicking | Reactive loop - table must not depend on selection-derived reactives |
+| bslib `card()` doesn't render in nav_panel | Use plain `div()` with inline CSS for top-level nav_panel content |
 | HF "Missing configuration in README" | Run README recovery script above |
 
+## Recent Changes (v2.1)
+
+### 2026-02-13: Added Comparison Selectors to Data Overview Tab
+1. **Signal Distribution sub-tab** (lines 502-523)
+   - Purple gradient banner with comparison selector (matches DE Dashboard style)
+   - Shows which comparison is being used for coloring
+   - Directly selectable - changes sync across all tabs
+   - Height adjusted to `calc(100vh - 420px)` to accommodate banner
+
+2. **Expression Grid sub-tab** (lines 524-552)
+   - Purple gradient banner with comparison selector
+   - Makes it clear which DE results are shown in the grid
+   - Selector syncs bidirectionally with main selector and Signal Distribution
+
+3. **Synchronization Logic** (lines 1496-1532)
+   - Three comparison selectors stay in sync: main (DE Dashboard), Signal Distribution, Expression Grid
+   - Change any selector → all others update automatically
+   - Prevents confusion about which comparison is being viewed
+   - All three populated when pipeline runs or session loads
+
+### 2026-02-13: Added P-value Distribution Diagnostic to QC Plots
+1. **New QC Plots Sub-Tab: P-value Distribution** (lines 704-708 UI, 2180-2333 server)
+   - Histogram of raw p-values from differential expression analysis
+   - Helps diagnose statistical issues: p-value inflation, lack of power, model problems
+   - Red dashed line shows expected uniform distribution under the null hypothesis
+   - Fullscreen button for detailed examination
+
+2. **Automated Pattern Detection & Contextual Guidance** (NEW):
+   - **Real-time health assessment**: Analyzes p-value distribution automatically
+   - **Color-coded guidance banners**: Appear above plot based on detected pattern
+     - 🟢 **Green (Healthy)**: Good spike near p=0 with uniform background
+     - 🟡 **Yellow (Warning)**: P-value inflation or low statistical power detected
+     - 🔴 **Red (Danger)**: U-shaped distribution indicating model issues
+     - 🔵 **Blue (Info)**: Completely uniform (no DE signal detected)
+   - **Actionable recommendations**: Each banner explains what was detected and what to do
+   - **Detection metrics**:
+     - Spike detection: Low p-value ratio vs expected (>2x = spike)
+     - Inflation detection: Mid-range (0.3-0.7) excess (>1.3x expected)
+     - Power assessment: Depletion of small p-values (<0.5x expected)
+     - U-shape detection: Both ends elevated (first & last bins >1.5x expected)
+
+3. **What it Detects**:
+   - **Healthy pattern**: Mostly flat (uniform) with spike near p=0 (true positives)
+   - **P-value inflation**: Too many intermediate values (0.3-0.7) suggests unmodeled variance, batch effects, or small sample size
+   - **Low power**: Depletion near zero means test is too conservative or underpowered
+   - **Model issues**: U-shaped distribution indicates statistical model problems or normalization issues
+   - **No signal**: Completely uniform = no differential expression detected
+
+4. **Built-in Guidance**:
+   - **Dynamic banners** with specific suggestions based on detected pattern
+   - Expandable "How do I interpret this?" section explains patterns
+   - Links to other diagnostic plots (Normalization, MDS, CV Distribution) for troubleshooting
+   - Suggests fixes: add covariates, check normalization, verify sample sizes, increase replicates
+
+5. **Technical Details**:
+   - Uses raw P.Value (not adj.P.Val) to assess null hypothesis behavior
+   - 30 bins (regular view), 40 bins (fullscreen)
+   - Comparison-specific (updates when contrast changes)
+   - Height: `calc(100vh - 400px)` for responsive sizing
+   - Pattern detection runs automatically on each comparison change
+
+### 2026-02-13: Added CV Histogram to Consistent DE Tab
+1. **Converted Consistent DE to Sub-Tabs** (lines 769-791 UI, 2296-2445 server)
+   - Tab 1: "High-Consistency Table" - existing table ranked by %CV
+   - Tab 2: "CV Distribution" - new histogram visualization
+   - Uses `navset_card_tab` pattern for easy switching between views
+
+2. **CV Distribution Histogram Features**:
+   - Histogram of CV values for all significant proteins (adj.P.Val < 0.05)
+   - Faceted by experimental group (separate panel for each group)
+   - Dashed vertical line shows average CV for each group
+   - Color-coded by group with annotations showing exact average values
+   - Height: `calc(100vh - 320px)` for responsive viewport sizing
+   - Fullscreen button opens extra-large modal view (700px height, 1000px width)
+
+3. **Implementation Details**:
+   - CV calculated in linear space (2^log2 expression) for each group
+   - CV = (SD / Mean) × 100
+   - Uses `pivot_longer()` to convert wide CV data to long format for ggplot2
+   - Histogram bins = 30 (regular view), 40 (fullscreen)
+   - `scales = "free_y"` allows each group's histogram to optimize its own Y-axis
+
+4. **Rationale**:
+   - Complements the existing table by showing the distribution shape
+   - Helps identify outlier proteins with unusually high/low CV
+   - Group-level averages show which conditions have more/less variability
+   - Lower CV = more stable and reproducible biomarker candidates
+
+### 2026-02-13: Interactive Comparison Selector on DE Dashboard
+1. **Moved comparison selector from sidebar to DE Dashboard banner** (lines 654-672)
+   - Used plain `div()` with inline CSS (gradient purple background)
+   - Dropdown selector embedded directly in banner for contextual access
+   - Removes redundancy (was duplicated in sidebar)
+
+### 2026-02-13: Assign Groups Moved to Data Overview Sub-Tab
+1. **Converted modal popup to permanent sub-tab** (lines 446-500)
+   - Fixes covariate text box layout issues (screenshot from user)
+   - Full screen width for metadata table (`calc(100vh - 480px)` height)
+   - Proper grid layout for controls: `grid-template-columns: 200px 1fr 250px`
+   - Removed modal observer code (~47 lines)
+   - Navigation: `nav_select("data_overview_tabs", "Assign Groups & Run")` instead of `click("open_setup")`
+
+### 2026-02-13: Signal Distribution Always Shows DE Coloring
+1. **Removed color toggle buttons** (lines 517-521)
+   - Deleted "Color by DE" and "Reset" buttons from UI
+   - Removed `values$color_plot_by_de` reactive flag
+   - Plot automatically colors by DE status when results are available
+
+2. **Updated plot to use dedicated selector** (lines 1757-1784 main, 2158-2180 fullscreen)
+   - Changed from `input$contrast_selector` to `input$contrast_selector_signal`
+   - Plot now responds to its own comparison selector in the purple banner
+   - Always shows DE coloring when fit object exists (no manual toggle needed)
+   - Height adjusted to `calc(100vh - 370px)` (removed button row saves 50px)
+
+3. **Removed button observers** (previously lines 1758-1759)
+   - Deleted `observeEvent(input$color_de)` and `observeEvent(input$reset_color)`
+   - Simplified reactive logic
+
+### 2026-02-13: Four-Way Comparison Selector Synchronization
+1. **Added P-value Distribution selector** (lines 729-740 UI)
+   - Purple gradient banner with `contrast_selector_pvalue` selector
+   - Matches style of Signal Distribution and Expression Grid selectors
+   - Plot height adjusted to `calc(100vh - 450px)` to accommodate banner
+
+2. **Updated P-value Distribution to use dedicated selector** (lines 2279-2282, 2435-2495)
+   - `assess_pvalue_health()` reactive uses `input$contrast_selector_pvalue`
+   - Main histogram plot uses `input$contrast_selector_pvalue`
+   - Fullscreen modal uses `input$contrast_selector_pvalue`
+
+3. **Four-way synchronization** (lines 1513-1543)
+   - Main selector (DE Dashboard) syncs to: Signal Distribution, Expression Grid, P-value Distribution
+   - Each of the 3 sub-selectors syncs back to main selector
+   - Change any selector → all 4 update automatically
+   - Populated when pipeline runs (lines 1475-1479) and session loads (lines 3028-3032)
+
+### 2026-02-13: Dataset Summary Shows DE Protein Counts
+1. **Added Differential Expression Summary section** (lines 1680-1743)
+   - Shows DE protein counts for all comparisons
+   - Displays total significant proteins (adj.P.Val < 0.05)
+   - **Explicit language**: "X proteins higher in [Group A]" and "Y proteins higher in [Group B]"
+   - Uses arrows (↑/↓) to indicate direction of change
+   - Color-coded: red for Group A (positive logFC), blue for Group B (negative logFC)
+   - Bordered cards with purple left border for each comparison
+   - Parses comparison names to extract group labels
+   - Auto-updates when pipeline runs
+   - Example display:
+     ```
+     🔬 Evosep - Astral (245 significant proteins)
+        ↑ 189 proteins higher in Evosep
+        ↓ 56 proteins higher in Astral
+     ```
+
+### 2026-02-13: AI Summary Moved to Data Overview Tab
+1. **New AI Summary sub-tab in Data Overview** (lines 564-600 UI, 1716-1802 server)
+   - 6th sub-tab in Data Overview (after Expression Grid)
+   - Purple gradient header matching other tabs
+   - Large "🤖 Generate AI Summary" button
+   - Output displays inline (no modal popup)
+   - Uses new button ID: `generate_ai_summary_overview`
+
+2. **Removed from DE Dashboard** (lines 849-857)
+   - Deleted "🤖 AI Summary" button from Results Table header
+   - Removed old observer `observeEvent(input$generate_ai_summary)` (~31 lines)
+   - Cleaner DE Dashboard with just Reset, Violin, and Export buttons
+
+3. **Server logic features**:
+   - Gathers top 50 significant proteins with gene symbols
+   - Identifies 3 most stable DE proteins (lowest CV across groups)
+   - Generates 3-paragraph summary via Gemini API
+   - Displays with markdown formatting in bordered output area
+
+### 2026-02-13: Volcano Plot FDR Threshold Annotations & Legend
+1. **Added colored threshold lines** (lines 3550-3579 main, 2744-2773 fullscreen)
+   - Horizontal FDR line (blue): p-value = 0.05
+   - Vertical logFC lines (orange): ±fold-change cutoff (user-adjustable slider)
+   - Lines colored instead of plain gray dashed for better visibility
+
+2. **Significance criteria legend box**:
+   - Uses **plotly's native `layout()` annotations** (not ggplot - better rendering)
+   - White semi-transparent box in upper-left corner
+   - Header: "Significant if:"
+   - Bullet points showing current thresholds:
+     - "FDR-adj. p < 0.05"
+     - "|log2FC| > X.XX" (dynamically updates with slider)
+   - Positioned using paper coordinates (% from edges) - never overlaps with data
+   - HTML formatting supported (`<b>` tags, `<br>` for line breaks)
+
+3. **Technical implementation**:
+   - Removed ggplot `annotate()` calls (unreliable in plotly conversion)
+   - Added plotly `layout(annotations = list(...), shapes = list(...))` after `ggplotly()`
+   - Annotations use `xref = "paper", yref = "paper"` for absolute positioning
+   - Legend box: `x0 = 0.01, x1 = 0.28, y0 = 0.88, y1 = 0.99` (paper coords)
+   - Text positioned at `x = 0.02, y = 0.98` and `y = 0.93` (paper coords)
+
+4. **Enhanced visual clarity**:
+   - Plot title shows current comparison
+   - Color scheme: Blue = FDR threshold, Orange = FC thresholds
+   - Legend box never obscures data points or threshold lines
+   - Both main plot and fullscreen modal have identical annotations
+   - Consistent rendering across zoom/pan operations
+
 ## Current TODO
-- [ ] Volcano plot: Add FDR threshold annotation/legend
+- [x] Volcano plot: Add FDR threshold annotation/legend ✅
 - [ ] GSEA: Add KEGG/Reactome enrichment; clarify which contrast is used
-- [ ] DE Dashboard: Make comparison bar clickable to change contrasts
+- [x] DE Dashboard: Make comparison bar clickable to change contrasts ✅
 - [ ] Grid View: Open violin plot on protein click with bar plot toggle
-- [ ] Consistent DE: Add CV histogram by condition
-- [ ] Data Overview: Show which comparison is used for signal distribution
+- [x] Consistent DE: Add CV histogram by condition ✅
+- [x] Data Overview: Show which comparison is used for signal distribution ✅
+- [x] Data Overview: Show DE protein counts per comparison ✅
+- [x] Move AI Summary to Data Overview tab ✅
 - [ ] Publication-quality plot exports (SVG/PNG/TIFF with size controls)
 - [ ] Sample correlation heatmap (QC Plots tab)
 - [ ] Venn diagram of significant proteins across comparisons
-- [ ] P-value histogram diagnostic
+- [x] P-value histogram diagnostic ✅
+- [x] P-value Distribution: Add comparison selector ✅
 - [ ] Sample CV distribution plots
 - [ ] Protein numbers bar plot per sample
 - [ ] Absence/presence table for on/off proteins
