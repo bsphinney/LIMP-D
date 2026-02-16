@@ -67,10 +67,12 @@ Line 4186:      shinyApp(ui, server)
 - `values$repro_log` - Cumulative R code for reproducibility
 - `values$xic_dir` - Path to XIC parquet directory
 - `values$xic_available` - Whether XIC files were detected
+- `values$xic_format` - "v1" (DIA-NN 1.x) or "v2" (DIA-NN 2.x)
 - `values$xic_protein` - Currently selected protein for XIC viewing
 - `values$xic_data` - Loaded & reshaped XIC data for current protein
 - `values$xic_report_map` - Protein → Precursor mapping from report
 - `values$uploaded_report_path` - Path to uploaded report.parquet
+- `values$mobilogram_available` - Whether mobilogram files with non-zero IM data exist
 
 ### LIMPA Pipeline Flow
 1. `readDIANN()` - Load DIA-NN parquet file
@@ -207,23 +209,45 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 
 ## Recent Changes (v2.1)
 
+### 2026-02-16: DIA-NN 2.x Format Support & Mobilogram Detection
+1. **Dual Format Support** (helper functions lines 1088-1250)
+   - `detect_xic_format(xic_dir)`: Auto-detects DIA-NN version from column names
+   - **v2** (DIA-NN 2.x): Long format with `pr`, `feature`, `info`, `rt`, `value` columns
+   - **v1** (DIA-NN 1.x): Wide format with numbered columns + `Retention.Times`/`Intensities` flag rows
+   - `load_xic_for_protein()`: Builds `StrippedSequence+Charge` key for v2, `Precursor.Id` for v1
+   - Per-file reading preserves `Source.File` for sample identity (v2 has no File.Name column)
+   - `reshape_xic_for_plotting()`: v2 data already long (just rename + join metadata), v1 does full pivot
+
+2. **Mobilogram Detection** (XIC directory loader)
+   - Scans for `.mobilogram.parquet` files alongside `.xic.parquet`
+   - Samples one file to check if data is non-zero (only timsTOF/IM instruments produce real data)
+   - `values$mobilogram_available` flag controls UI toggle visibility
+   - Status badge shows "+ IM" when ion mobility data detected
+   - "Show Ion Mobility" checkbox conditionally appears in XIC modal controls
+
+3. **Precursor Mapping** (report map loading)
+   - Now loads `Precursor.Charge` column from report for v2 key building
+   - v2 key: `paste0(Stripped.Sequence, Precursor.Charge)` matches XIC `pr` column
+   - Graceful fallback if `Precursor.Charge` column not present in older reports
+
 ### 2026-02-15: XIC Viewer for Differentially Expressed Proteins
 1. **Sidebar Section "5. XIC Viewer"** (lines 438-447 UI)
    - `textInput` for XIC directory path (HPC/local users paste path)
    - "Load XICs" button with wave-square icon
-   - Status badge shows file count when loaded
+   - Status badge shows file count, format version, and IM availability
    - Not visible on HF (XIC files too large for cloud deployment)
 
 2. **XIC Trigger Buttons**
    - DE Dashboard results table: "📈 XICs" button (line 864) alongside Reset, Violin, Export
    - Grid View modal footer: "📈 XICs" button (line 1989) alongside Back to Grid
 
-3. **Helper Functions** (lines 1088-1175)
-   - `load_xic_for_protein(xic_dir, protein_id, report_map)`: Arrow predicate pushdown reads only target precursor rows from potentially GB-sized `.xic.parquet` files
-   - `reshape_xic_for_plotting(xic_raw, metadata)`: Pairs RT/intensity rows, pivots to long format, adds fragment labels (y/b ions) and group metadata via fuzzy File.Name matching
+3. **Helper Functions** (lines 1088-1250)
+   - `detect_xic_format()`: Auto-detect v1 vs v2 format
+   - `load_xic_for_protein(xic_dir, protein_id, report_map, xic_format)`: Arrow predicate pushdown, dual format
+   - `reshape_xic_for_plotting(xic_raw, metadata, xic_format)`: Format-aware reshaping
 
-4. **XIC Modal** (lines 3780-3857)
-   - Full-width modal with controls: Display mode, Precursor selector, Group filter, MS1 checkbox
+4. **XIC Modal** (lines 3950+)
+   - Full-width modal with controls: Display mode, Precursor selector, Group filter, MS1 checkbox, IM toggle
    - Three display modes: Overlay (fragments per sample), Facet by fragment, Facet by sample
    - Plotly interactive chromatograms with tooltips (Sample, Fragment, RT, Intensity)
    - Info panel shows protein stats, RT range, DE stats (logFC, adj.P.Val)
@@ -232,11 +256,11 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 
 5. **Data Loading Architecture**
    - On-demand lazy loading: Arrow `open_dataset()` with predicate pushdown
-   - Fallback: individual file reads if schema mismatch across DIA-NN versions
+   - Fallback: individual per-file reads if schema mismatch across DIA-NN versions
    - Protein → Precursor mapping loaded from report.parquet on XIC dir load
    - Caps at top 6 precursors for very large proteins (e.g., Titin)
 
-6. **Report Path Storage** (lines 1189, 1131)
+6. **Report Path Storage** (lines 1289, 1234)
    - `values$uploaded_report_path` stored on both user upload and example data load
    - Enables XIC precursor mapping without re-reading the report
 

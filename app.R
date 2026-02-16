@@ -1069,10 +1069,13 @@ server <- function(input, output, session) {
     # === XIC Viewer ===
     xic_dir = NULL,              # Path to directory containing .xic.parquet files
     xic_available = FALSE,       # Whether XIC files were detected
+    xic_format = "v2",           # "v1" (DIA-NN 1.x wide) or "v2" (DIA-NN 2.x long)
     xic_protein = NULL,          # Currently selected protein for XIC viewing
     xic_data = NULL,             # Loaded XIC data (tibble, only for selected protein)
     xic_report_map = NULL,       # Protein → Precursor mapping from report
-    uploaded_report_path = NULL   # Path to uploaded report.parquet for re-reading
+    uploaded_report_path = NULL,  # Path to uploaded report.parquet for re-reading
+    mobilogram_available = FALSE, # Whether mobilogram files with non-zero data exist
+    mobilogram_dir = NULL         # Path to mobilogram directory (same as xic_dir)
   )
 
   # Helper function to append to reproducibility log
@@ -1085,99 +1088,175 @@ server <- function(input, output, session) {
     values$repro_log <- c(values$repro_log, header, code_lines)
   }
 
-  # Helper: Load XIC data for a single protein using Arrow predicate pushdown
-  load_xic_for_protein <- function(xic_dir, protein_id, report_map) {
-    target_precursors <- report_map %>%
-      filter(Protein.Group == protein_id) %>%
-      distinct(Precursor.Id) %>%
-      pull(Precursor.Id)
-
-    if (length(target_precursors) == 0) return(NULL)
-
-    tryCatch({
-      ds <- arrow::open_dataset(xic_dir, format = "parquet")
-      xic_data <- ds %>%
-        filter(Precursor.Id %in% target_precursors) %>%
-        collect()
-      if (nrow(xic_data) == 0) return(NULL)
-      xic_data
-    }, error = function(e) {
-      # Fallback: read files individually (handles non-uniform schemas)
-      xic_files <- list.files(xic_dir, pattern = "\\.xic\\.parquet$",
-                              full.names = TRUE, recursive = TRUE)
-      xic_list <- lapply(xic_files, function(f) {
-        tryCatch({
-          arrow::read_parquet(f) %>%
-            filter(Precursor.Id %in% target_precursors)
-        }, error = function(e2) NULL)
-      })
-      bind_rows(Filter(Negate(is.null), xic_list))
-    })
+  # Helper: Detect XIC format version from column names
+  detect_xic_format <- function(xic_dir) {
+    xic_files <- list.files(xic_dir, pattern = "\\.xic\\.parquet$",
+                            full.names = TRUE, recursive = TRUE)
+    if (length(xic_files) == 0) return("unknown")
+    cols <- tryCatch(names(arrow::read_parquet(xic_files[1], as_data_frame = FALSE)),
+                     error = function(e) character(0))
+    if (all(c("pr", "feature", "rt", "value") %in% cols)) return("v2")
+    if ("Precursor.Id" %in% cols) return("v1")
+    return("unknown")
   }
 
-  # Helper: Reshape raw XIC data into tidy long format for ggplot
-  reshape_xic_for_plotting <- function(xic_raw, metadata) {
-    num_cols <- names(xic_raw)[grepl("^\\d+$", names(xic_raw))]
-    if (length(num_cols) == 0) {
-      warning("No numbered columns found in XIC data")
-      return(NULL)
+  # Helper: Load XIC data for a single protein using Arrow predicate pushdown
+  # Supports both DIA-NN 1.x (wide format) and 2.x (long format: pr/feature/rt/value)
+  load_xic_for_protein <- function(xic_dir, protein_id, report_map, xic_format = "v2") {
+    if (xic_format == "v2") {
+      # DIA-NN 2.x: pr = StrippedSequence + Charge (e.g., "PEPTIDEK2")
+      target_prs <- report_map %>%
+        filter(Protein.Group == protein_id) %>%
+        mutate(pr_key = paste0(Stripped.Sequence, Precursor.Charge)) %>%
+        distinct(pr_key) %>%
+        pull(pr_key)
+    } else {
+      # DIA-NN 1.x: Precursor.Id column directly
+      target_prs <- report_map %>%
+        filter(Protein.Group == protein_id) %>%
+        distinct(Precursor.Id) %>%
+        pull(Precursor.Id)
     }
 
-    make_key <- function(df) {
-      paste(df$File.Name, df$Precursor.Id, df$MS.Level,
-            df$Theoretical.Mz, df$FragmentType, df$FragmentCharge,
-            df$FragmentSeriesNumber, df$FragmentLossType, sep = "|")
+    if (length(target_prs) == 0) return(NULL)
+    filter_col <- if (xic_format == "v2") "pr" else "Precursor.Id"
+
+    # Read only .xic.parquet files (exclude mobilograms)
+    xic_files <- list.files(xic_dir, pattern = "\\.xic\\.parquet$",
+                            full.names = TRUE, recursive = TRUE)
+
+    tryCatch({
+      # Try open_dataset for unified read across files
+      ds <- arrow::open_dataset(xic_files, format = "parquet")
+      xic_data <- ds %>%
+        filter(!!rlang::sym(filter_col) %in% target_prs) %>%
+        collect()
+      # Tag with source file for sample identification (v2 has no File.Name column)
+      if (xic_format == "v2" && !"File.Name" %in% names(xic_data)) {
+        # Fallback to per-file read to preserve file identity
+        xic_data <- NULL
+      }
+      if (!is.null(xic_data) && nrow(xic_data) > 0) return(xic_data)
+    }, error = function(e) NULL)
+
+    # Per-file read: needed for v2 (to tag File.Name) or schema mismatches
+    xic_list <- lapply(xic_files, function(f) {
+      tryCatch({
+        df <- arrow::read_parquet(f) %>%
+          filter(!!rlang::sym(filter_col) %in% target_prs)
+        if (nrow(df) > 0) {
+          # Extract sample name from filename for v2 format
+          sample_name <- basename(f)
+          sample_name <- sub("\\.xic\\.parquet$", "", sample_name)
+          df$Source.File <- sample_name
+        }
+        df
+      }, error = function(e2) NULL)
+    })
+    result <- bind_rows(Filter(function(x) !is.null(x) && nrow(x) > 0, xic_list))
+    if (nrow(result) == 0) return(NULL)
+    result
+  }
+
+  # Helper: Reshape XIC data for plotting — handles both v1 and v2 formats
+  reshape_xic_for_plotting <- function(xic_raw, metadata, xic_format = "v2") {
+
+    if (xic_format == "v2") {
+      # ── DIA-NN 2.x: already long format (pr, feature, info, rt, value) ──
+      xic_plot <- xic_raw %>%
+        rename(
+          Precursor.Id = pr,
+          Fragment.Label = feature,
+          RT = rt,
+          Intensity = value
+        ) %>%
+        mutate(
+          MS.Level = ifelse(Fragment.Label == "ms1", 1L, 2L),
+          RT = as.numeric(RT),
+          Intensity = as.numeric(Intensity)
+        ) %>%
+        filter(!(Intensity == 0 & RT == 0))
+
+      # Match Source.File to metadata File.Name via fuzzy basename matching
+      if ("Source.File" %in% names(xic_plot)) {
+        meta_lookup <- metadata %>%
+          mutate(File.Name.Base = basename(tools::file_path_sans_ext(File.Name)))
+        xic_plot <- xic_plot %>%
+          mutate(File.Name = Source.File,
+                 File.Name.Base = Source.File) %>%
+          left_join(
+            meta_lookup %>% select(File.Name.Base, Group, ID),
+            by = "File.Name.Base"
+          )
+      }
+
+      xic_plot <- xic_plot %>%
+        select(any_of(c("File.Name", "ID", "Group", "Precursor.Id",
+                         "MS.Level", "Fragment.Label", "RT", "Intensity")))
+
+      return(xic_plot)
+
+    } else {
+      # ── DIA-NN 1.x: wide format with numbered columns ──
+      num_cols <- names(xic_raw)[grepl("^\\d+$", names(xic_raw))]
+      if (length(num_cols) == 0) {
+        warning("No numbered columns found in XIC data")
+        return(NULL)
+      }
+
+      make_key <- function(df) {
+        paste(df$File.Name, df$Precursor.Id, df$MS.Level,
+              df$Theoretical.Mz, df$FragmentType, df$FragmentCharge,
+              df$FragmentSeriesNumber, df$FragmentLossType, sep = "|")
+      }
+
+      rt_rows <- xic_raw %>% filter(Retention.Times == 1)
+      int_rows <- xic_raw %>% filter(Intensities == 1)
+
+      rt_long <- rt_rows %>%
+        mutate(.key = make_key(rt_rows)) %>%
+        select(.key, all_of(num_cols)) %>%
+        pivot_longer(cols = all_of(num_cols), names_to = "point_idx", values_to = "RT")
+
+      int_long <- int_rows %>%
+        mutate(.key = make_key(int_rows)) %>%
+        select(.key, File.Name, Precursor.Id, Modified.Sequence, MS.Level,
+               Theoretical.Mz, Reference.Intensity, FragmentType, FragmentCharge,
+               FragmentSeriesNumber, FragmentLossType, all_of(num_cols)) %>%
+        pivot_longer(cols = all_of(num_cols), names_to = "point_idx", values_to = "Intensity")
+
+      xic_plot <- inner_join(
+        rt_long %>% select(.key, point_idx, RT),
+        int_long,
+        by = c(".key", "point_idx")
+      ) %>%
+        mutate(
+          RT = as.numeric(RT),
+          Intensity = as.numeric(Intensity),
+          Fragment.Label = case_when(
+            MS.Level == 1 ~ paste0("MS1 (", round(as.numeric(Theoretical.Mz), 2), ")"),
+            TRUE ~ paste0(FragmentType, FragmentSeriesNumber,
+                          ifelse(as.integer(FragmentCharge) > 1,
+                                 paste0("+", FragmentCharge), ""),
+                          ifelse(FragmentLossType != "noloss",
+                                 paste0("-", FragmentLossType), ""))
+          )
+        ) %>%
+        filter(!(Intensity == 0 & RT == 0)) %>%
+        mutate(File.Name.Base = basename(tools::file_path_sans_ext(
+          tools::file_path_sans_ext(File.Name)))) %>%
+        left_join(
+          metadata %>%
+            mutate(File.Name.Base = basename(tools::file_path_sans_ext(File.Name))) %>%
+            select(File.Name.Base, Group, ID),
+          by = "File.Name.Base"
+        ) %>%
+        select(File.Name, ID, Group, Precursor.Id, Modified.Sequence,
+               MS.Level, Fragment.Label, Theoretical.Mz, Reference.Intensity,
+               RT, Intensity)
+
+      return(xic_plot)
     }
-
-    rt_rows <- xic_raw %>% filter(Retention.Times == 1)
-    int_rows <- xic_raw %>% filter(Intensities == 1)
-
-    rt_keys <- make_key(rt_rows)
-    int_keys <- make_key(int_rows)
-
-    rt_long <- rt_rows %>%
-      mutate(.key = rt_keys) %>%
-      select(.key, all_of(num_cols)) %>%
-      pivot_longer(cols = all_of(num_cols), names_to = "point_idx", values_to = "RT")
-
-    int_long <- int_rows %>%
-      mutate(.key = int_keys) %>%
-      select(.key, File.Name, Precursor.Id, Modified.Sequence, MS.Level,
-             Theoretical.Mz, Reference.Intensity, FragmentType, FragmentCharge,
-             FragmentSeriesNumber, FragmentLossType, all_of(num_cols)) %>%
-      pivot_longer(cols = all_of(num_cols), names_to = "point_idx", values_to = "Intensity")
-
-    xic_plot <- inner_join(
-      rt_long %>% select(.key, point_idx, RT),
-      int_long,
-      by = c(".key", "point_idx")
-    ) %>%
-      mutate(
-        RT = as.numeric(RT),
-        Intensity = as.numeric(Intensity),
-        Fragment.Label = case_when(
-          MS.Level == 1 ~ paste0("MS1 (", round(as.numeric(Theoretical.Mz), 2), ")"),
-          TRUE ~ paste0(FragmentType, FragmentSeriesNumber,
-                        ifelse(as.integer(FragmentCharge) > 1,
-                               paste0("+", FragmentCharge), ""),
-                        ifelse(FragmentLossType != "noloss",
-                               paste0("-", FragmentLossType), ""))
-        )
-      ) %>%
-      filter(!(Intensity == 0 & RT == 0)) %>%
-      mutate(File.Name.Base = basename(tools::file_path_sans_ext(
-        tools::file_path_sans_ext(File.Name)))) %>%
-      left_join(
-        metadata %>%
-          mutate(File.Name.Base = basename(tools::file_path_sans_ext(File.Name))) %>%
-          select(File.Name.Base, Group, ID),
-        by = "File.Name.Base"
-      ) %>%
-      select(.key, File.Name, ID, Group, Precursor.Id, Modified.Sequence,
-             MS.Level, Fragment.Label, Theoretical.Mz, Reference.Intensity,
-             RT, Intensity)
-
-    return(xic_plot)
   }
 
   # ============================================================================
@@ -3789,13 +3868,43 @@ server <- function(input, output, session) {
       values$xic_dir <- xic_path
       values$xic_available <- TRUE
 
+      # Detect XIC format version (v1 = DIA-NN 1.x wide, v2 = DIA-NN 2.x long)
+      values$xic_format <- detect_xic_format(xic_path)
+      message(paste("Detected XIC format:", values$xic_format))
+
+      # Detect mobilogram files and check if they contain non-zero data
+      mob_files <- list.files(xic_path, pattern = "\\.mobilogram\\.parquet$",
+                              full.names = TRUE, recursive = TRUE)
+      if (length(mob_files) > 0) {
+        # Sample one file to check for non-zero data (IM instruments only)
+        mob_has_data <- tryCatch({
+          mob_sample <- arrow::read_parquet(mob_files[1], as_data_frame = TRUE)
+          any(mob_sample$data != 0, na.rm = TRUE)
+        }, error = function(e) FALSE)
+        values$mobilogram_available <- mob_has_data
+        if (mob_has_data) values$mobilogram_dir <- xic_path
+        message(paste("Mobilogram files:", length(mob_files),
+                      "| Has IM data:", mob_has_data))
+      } else {
+        values$mobilogram_available <- FALSE
+      }
+
       # Pre-load precursor mapping if report is available
       if (!is.null(values$uploaded_report_path)) {
         tryCatch({
+          # Include Precursor.Charge for DIA-NN 2.x pr key mapping
+          report_cols <- c("Protein.Group", "Precursor.Id",
+                           "Modified.Sequence", "Stripped.Sequence", "File.Name")
+          # Try to also get Precursor.Charge (needed for v2 format)
+          all_cols <- tryCatch(
+            names(arrow::read_parquet(values$uploaded_report_path, as_data_frame = FALSE)),
+            error = function(e) character(0))
+          if ("Precursor.Charge" %in% all_cols) {
+            report_cols <- c(report_cols, "Precursor.Charge")
+          }
           values$xic_report_map <- arrow::read_parquet(
             values$uploaded_report_path,
-            col_select = c("Protein.Group", "Precursor.Id",
-                           "Modified.Sequence", "Stripped.Sequence", "File.Name")
+            col_select = report_cols
           ) %>% distinct()
 
           message(paste("XIC precursor map loaded:",
@@ -3807,8 +3916,11 @@ server <- function(input, output, session) {
         })
       }
 
-      showNotification(
-        paste("Found", length(xic_files), "XIC files. Select a protein to view chromatograms."),
+      status_msg <- paste("Found", length(xic_files), "XIC files")
+      if (values$mobilogram_available) {
+        status_msg <- paste0(status_msg, " + ion mobility data")
+      }
+      showNotification(paste0(status_msg, ". Select a protein to view chromatograms."),
         type = "message", duration = 5)
     } else {
       values$xic_available <- FALSE
@@ -3822,10 +3934,14 @@ server <- function(input, output, session) {
   output$xic_status_badge <- renderUI({
     if (values$xic_available) {
       xic_files <- list.files(values$xic_dir, pattern = "\\.xic\\.parquet$")
+      badge_text <- paste(length(xic_files), "XIC files ready")
+      if (values$mobilogram_available) badge_text <- paste0(badge_text, " + IM")
+      format_label <- if (values$xic_format == "v2") "DIA-NN 2.x" else "DIA-NN 1.x"
       div(class = "alert alert-success py-1 px-2 mt-2 mb-0",
         style = "font-size: 0.85em;",
         icon("check-circle"),
-        paste(length(xic_files), "XIC files ready"))
+        badge_text, br(),
+        span(class = "text-muted", style = "font-size: 0.85em;", format_label))
     } else {
       NULL
     }
@@ -3856,7 +3972,12 @@ server <- function(input, output, session) {
         selectInput("xic_group_filter", "Filter Group:",
           choices = NULL, width = "180px"),
 
-        checkboxInput("xic_show_ms1", "Show MS1", value = FALSE)
+        checkboxInput("xic_show_ms1", "Show MS1", value = FALSE),
+
+        # Ion mobility toggle — only shown when mobilogram data is available
+        if (values$mobilogram_available) {
+          checkboxInput("xic_show_mobilogram", "Show Ion Mobility", value = FALSE)
+        }
       ),
 
       # Main plot
@@ -3920,13 +4041,15 @@ server <- function(input, output, session) {
         xic_raw <- load_xic_for_protein(
           xic_dir = values$xic_dir,
           protein_id = values$xic_protein,
-          report_map = values$xic_report_map
+          report_map = values$xic_report_map,
+          xic_format = values$xic_format
         )
 
         if (!is.null(xic_raw) && nrow(xic_raw) > 0) {
           incProgress(0.6, detail = "Reshaping data...")
 
-          values$xic_data <- reshape_xic_for_plotting(xic_raw, values$metadata)
+          values$xic_data <- reshape_xic_for_plotting(
+            xic_raw, values$metadata, xic_format = values$xic_format)
 
           # Update precursor selector
           precursors <- unique(values$xic_data$Precursor.Id)
@@ -3936,7 +4059,8 @@ server <- function(input, output, session) {
             selected = "all")
 
           # Update group filter
-          groups <- unique(values$metadata$Group)
+          groups <- unique(na.omit(values$xic_data$Group))
+          if (length(groups) == 0) groups <- unique(values$metadata$Group)
           updateSelectInput(session, "xic_group_filter",
             choices = c("All Groups" = "all", setNames(groups, groups)),
             selected = "all")
