@@ -1305,8 +1305,8 @@ server <- function(input, output, session) {
           cand <- file.path(getwd(), "Affinisep_vs_evosep_noNorm_xic")
           if (dir.exists(cand) && length(list.files(cand, pattern = "\\.xic\\.parquet$")) > 0) {
             updateTextInput(session, "xic_dir_input", value = cand)
-            showNotification("Auto-detected XIC directory for example data.",
-              type = "message", duration = 4)
+            # Auto-load XICs after a short delay (let updateTextInput propagate)
+            shinyjs::delay(500, shinyjs::click("xic_load_dir"))
           }
         }, error = function(e) NULL)
 
@@ -1385,8 +1385,8 @@ server <- function(input, output, session) {
           for (cand in candidate_dirs) {
             if (dir.exists(cand) && length(list.files(cand, pattern = "\\.xic\\.parquet$")) > 0) {
               updateTextInput(session, "xic_dir_input", value = cand)
-              showNotification(paste0("Auto-detected XIC directory: ", basename(cand)),
-                type = "message", duration = 4)
+              # Auto-load XICs after a short delay (let updateTextInput propagate)
+              shinyjs::delay(500, shinyjs::click("xic_load_dir"))
               break
             }
           }
