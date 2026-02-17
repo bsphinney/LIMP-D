@@ -144,6 +144,9 @@ library(markdown) # Needed for AI formatting
 
 options(shiny.maxRequestSize = 500 * 1024^2)
 
+# Detect Hugging Face Spaces environment (SPACE_ID is set automatically by HF)
+is_hf_space <- nzchar(Sys.getenv("SPACE_ID", ""))
+
 # Verify Limpa installation
 if (!requireNamespace("limpa", quietly = TRUE)) {
   os_type <- Sys.info()["sysname"]
@@ -435,14 +438,24 @@ ui <- page_sidebar(
     br(), br(),
     textInput("model_name", "Model Name", value = "gemini-3-flash-preview", placeholder = "gemini-3-flash-preview"),
     hr(),
-    h5("5. XIC Viewer"),
-    p(class = "text-muted small",
-      "Load .xic.parquet files from DIA-NN to inspect chromatograms."),
-    textInput("xic_dir_input", "XIC Directory Path:",
-      placeholder = "Auto-detected or paste path here"),
-    actionButton("xic_load_dir", "Load XICs", class = "btn-outline-info btn-sm w-100",
-      icon = icon("wave-square")),
-    uiOutput("xic_status_badge")
+    if (!is_hf_space) tagList(
+      h5("5. XIC Viewer"),
+      p(class = "text-muted small",
+        "Load .xic.parquet files from DIA-NN to inspect chromatograms."),
+      textInput("xic_dir_input", "XIC Directory Path:",
+        placeholder = "Auto-detected or paste path here"),
+      actionButton("xic_load_dir", "Load XICs", class = "btn-outline-info btn-sm w-100",
+        icon = icon("wave-square")),
+      uiOutput("xic_status_badge")
+    ),
+    if (is_hf_space) div(
+      style = "padding: 8px; margin-top: 4px; background: linear-gradient(135deg, #e0f2fe, #f0f9ff); border: 1px solid #bae6fd; border-radius: 8px; font-size: 0.82em;",
+      icon("chart-line", style = "color: #0284c7;"),
+      span(style = "font-weight: 600; color: #0c4a6e;", " XIC Viewer"),
+      p(style = "margin: 4px 0 0 0; color: #475569;",
+        "Fragment-level chromatogram inspection is available when running DE-LIMP locally or on HPC.",
+        tags$a(href = "https://github.com/bsphinney/DE-LIMP", target = "_blank", " Download here."))
+    )
   ),
   
   navset_card_tab(
@@ -861,7 +874,7 @@ ui <- page_sidebar(
                       div(
                         actionButton("clear_plot_selection", "Reset", class="btn-warning btn-xs"),
                         actionButton("show_violin", "📊 Violin", class="btn-primary btn-xs"),
-                        actionButton("show_xic", "📈 XICs", class="btn-info btn-xs"),
+                        if (!is_hf_space) actionButton("show_xic", "📈 XICs", class="btn-info btn-xs"),
                         downloadButton("download_result_csv", "💾 Export", class="btn-success btn-xs")
                       )
                     )
@@ -1301,15 +1314,17 @@ server <- function(input, output, session) {
         values$uploaded_report_path <- session_report
         values$original_report_name <- "Affinisep_vs_evosep_noNorm.parquet"
 
-        # Auto-detect XIC directory in working directory for example data
-        tryCatch({
-          cand <- file.path(getwd(), "Affinisep_vs_evosep_noNorm_xic")
-          if (dir.exists(cand) && length(list.files(cand, pattern = "\\.xic\\.parquet$")) > 0) {
-            updateTextInput(session, "xic_dir_input", value = cand)
-            # Auto-load XICs after a short delay (let updateTextInput propagate)
-            shinyjs::delay(500, shinyjs::click("xic_load_dir"))
-          }
-        }, error = function(e) NULL)
+        # Auto-detect XIC directory in working directory for example data (local/HPC only)
+        if (!is_hf_space) {
+          tryCatch({
+            cand <- file.path(getwd(), "Affinisep_vs_evosep_noNorm_xic")
+            if (dir.exists(cand) && length(list.files(cand, pattern = "\\.xic\\.parquet$")) > 0) {
+              updateTextInput(session, "xic_dir_input", value = cand)
+              # Auto-load XICs after a short delay (let updateTextInput propagate)
+              shinyjs::delay(500, shinyjs::click("xic_load_dir"))
+            }
+          }, error = function(e) NULL)
+        }
 
         incProgress(0.9, detail = "Opening setup...")
 
@@ -1374,24 +1389,25 @@ server <- function(input, output, session) {
         values$uploaded_report_path <- session_report
         values$original_report_name <- input$report_file$name
 
-        # Auto-detect XIC directory next to the uploaded report
-        # For local Shiny, check if _xic sibling directory exists
-        tryCatch({
-          report_name <- tools::file_path_sans_ext(input$report_file$name)
-          # Check common locations: working directory, or if user uploaded from a known path
-          candidate_dirs <- c(
-            file.path(getwd(), paste0(report_name, "_xic")),
-            file.path(dirname(input$report_file$datapath), paste0(report_name, "_xic"))
-          )
-          for (cand in candidate_dirs) {
-            if (dir.exists(cand) && length(list.files(cand, pattern = "\\.xic\\.parquet$")) > 0) {
-              updateTextInput(session, "xic_dir_input", value = cand)
-              # Auto-load XICs after a short delay (let updateTextInput propagate)
-              shinyjs::delay(500, shinyjs::click("xic_load_dir"))
-              break
+        # Auto-detect XIC directory next to the uploaded report (local/HPC only)
+        if (!is_hf_space) {
+          tryCatch({
+            report_name <- tools::file_path_sans_ext(input$report_file$name)
+            # Check common locations: working directory, or if user uploaded from a known path
+            candidate_dirs <- c(
+              file.path(getwd(), paste0(report_name, "_xic")),
+              file.path(dirname(input$report_file$datapath), paste0(report_name, "_xic"))
+            )
+            for (cand in candidate_dirs) {
+              if (dir.exists(cand) && length(list.files(cand, pattern = "\\.xic\\.parquet$")) > 0) {
+                updateTextInput(session, "xic_dir_input", value = cand)
+                # Auto-load XICs after a short delay (let updateTextInput propagate)
+                shinyjs::delay(500, shinyjs::click("xic_load_dir"))
+                break
+              }
             }
-          }
-        }, error = function(e) NULL)
+          }, error = function(e) NULL)
+        }
 
         # Navigate to Assign Groups sub-tab
         nav_select("main_tabs", "Data Overview")
@@ -2181,7 +2197,8 @@ server <- function(input, output, session) {
     req(grid_react_df()); selected_idx <- input$grid_view_table_rows_selected
     if (length(selected_idx) > 0) {
       gdata <- grid_react_df(); selected_id <- gdata$data$Original.ID[selected_idx]; values$grid_selected_protein <- selected_id
-      showModal(modalDialog(title = paste("Expression Plot:", selected_id), size = "xl", plotOutput("violin_plot_grid", height = "600px"), footer = tagList(actionButton("show_xic_from_grid", "📈 XICs", class="btn-info"), actionButton("back_to_grid", "Back to Grid", class="btn-info"), modalButton("Close")), easyClose = TRUE))
+      xic_btn <- if (!is_hf_space) actionButton("show_xic_from_grid", "📈 XICs", class="btn-info") else NULL
+      showModal(modalDialog(title = paste("Expression Plot:", selected_id), size = "xl", plotOutput("violin_plot_grid", height = "600px"), footer = tagList(xic_btn, actionButton("back_to_grid", "Back to Grid", class="btn-info"), modalButton("Close")), easyClose = TRUE))
     }
   })
   
