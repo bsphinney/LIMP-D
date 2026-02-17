@@ -26,6 +26,7 @@ An interactive R Shiny application for differential expression analysis of DIA-N
 
 **XIC Chromatogram Viewer** (Local/HPC only):
 - 📈 **Fragment-level XIC inspection** for DE proteins with split-axis MS1/MS2 view
+- 📊 **MS2 Intensity Alignment** - Spectronaut-style fragment ion ratio consistency check with automatic inconsistency detection
 - ⚡ **Ion mobility support** for timsTOF/PASEF data
 - 🔄 **Auto-detects** DIA-NN 1.x and 2.x formats
 

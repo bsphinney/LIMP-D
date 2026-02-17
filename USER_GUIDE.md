@@ -11,8 +11,9 @@ Welcome to **DE-LIMP** (Differential Expression & Limpa Proteomics), your intera
 - Supports **DIA-NN 1.x and 2.x** XIC formats with automatic detection
 - **Split-axis MS1/MS2 view**: MS1 precursor on top, MS2 fragments below with independent y-axes
 - **Ion Mobility support**: Mobilogram visualization for timsTOF/PASEF data with prominent mode indicator
-- Two display modes: Facet by sample or Facet by fragment
-- **Auto-detection**: XIC directory path auto-populates when data is loaded
+- Three display modes: Facet by sample, Facet by fragment, and Intensity alignment
+- **MS2 Intensity Alignment**: Spectronaut-style stacked bar chart for fragment ion ratio consistency with automatic inconsistency detection
+- **Auto-detection**: XIC directory path auto-populates when data is loaded; XICs auto-load when detected
 - Available for local and HPC deployments (XIC files too large for cloud)
 
 ### Major UI/UX Enhancements
@@ -214,6 +215,7 @@ The XIC Viewer lets you inspect fragment-level chromatograms for differentially 
 - **Display Mode:**
   - *Facet by sample* — Each panel shows one sample with all fragment ions overlaid (color = fragment)
   - *Facet by fragment* — Each panel shows one fragment ion with all samples overlaid (color = group)
+  - *Intensity alignment* — Spectronaut-style stacked bar chart showing relative fragment ion proportions per sample. Bars are ordered by experimental group with dashed separators. Automatic inconsistency detection flags samples where fragment ratios deviate significantly (> mean + 2 SD), with green (all consistent) or amber (flagged samples) guidance banners. Tooltips include AUC, proportion, deviation score, and cosine similarity.
 - **Show MS1 (split axis):** When checked, the plot splits into two rows:
   - Top row: **MS1 precursor** signal (often much more intense)
   - Bottom row: **MS2 fragment** ions

@@ -30,10 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Smart path resolution: accepts `.parquet` file paths or directories without `_xic` suffix
 - **Precursor Map from In-Memory Data**: Builds protein→precursor mapping from `values$raw_data` (no file I/O)
 
+- **XIC Auto-Load**: XICs automatically load when `_xic` directory is detected on data upload (no manual button click needed)
+
 ### Fixed
 - **Assign Groups Layout**: Fixed Run Pipeline button pushed off-screen on MacBook (CSS Grid → Flexbox)
 - **Arrow/dplyr Conflicts**: `arrow::select` masking `dplyr::select` — use explicit `dplyr::select()` in XIC code
 - **Tidy Evaluation Issues**: `rlang::sym("pr")` and `rename(Precursor.Id = pr)` replaced with base R equivalents
+- **Mobilogram Detection Pattern**: Fixed file pattern to match DIA-NN naming convention (`_mobilogram.parquet` not `.mobilogram.parquet`)
 
 ## [2.1.0] - 2026-02-13
 

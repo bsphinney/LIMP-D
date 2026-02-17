@@ -61,9 +61,10 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ### 📈 XIC Chromatogram Viewer (Local/HPC)
 - **Fragment-level validation** - Inspect chromatograms for any DE protein
+- **MS2 Intensity Alignment** - Spectronaut-style stacked bar chart for fragment ion ratio consistency with automatic inconsistency detection
 - **Split-axis MS1/MS2** - Independent y-axes prevent MS1 from squishing fragment peaks
 - **Ion mobility support** - Mobilogram visualization for timsTOF/PASEF instruments
-- **Smart auto-detection** - XIC directory auto-populates from report filename
+- **Smart auto-detection** - XIC directory auto-populates and auto-loads when data is uploaded
 - **Dual format** - Supports DIA-NN 1.x and 2.x XIC output formats
 
 ### 🔬 Advanced Features

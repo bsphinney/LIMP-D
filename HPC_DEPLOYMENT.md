@@ -287,6 +287,7 @@ DIA-NN generates `_xic` directories containing per-file `.xic.parquet` files alo
    - If mobilogram files with non-zero data are found (timsTOF/PASEF), an ion mobility toggle appears
 
 3. **Select a protein** in the DE Dashboard and click "📈 XICs" to view chromatograms.
+   - Three display modes available: Facet by sample, Facet by fragment, and **Intensity alignment** (Spectronaut-style fragment ratio consistency check)
 
 **Tip:** XIC files can be large (hundreds of MB per sample). Ensure your `--mem` allocation is sufficient — 32GB+ recommended when viewing XICs for datasets with many samples.
 
