@@ -3888,7 +3888,7 @@ server <- function(input, output, session) {
     }
 
     # If path doesn't end with _xic, try appending _xic (user may have pasted the parent dir)
-    if (!dir.exists(xic_path) && !grepl("_xic/?$", xic_path)) {
+    if (!dir.exists(xic_path) && !grepl("_xic$", basename(xic_path))) {
       candidate <- paste0(xic_path, "_xic")
       if (dir.exists(candidate)) {
         xic_path <- candidate
