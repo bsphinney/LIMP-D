@@ -23,7 +23,7 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 
 | File | Purpose |
 |------|---------|
-| `app.R` | Main Shiny app (~2800 lines) - used by HF Spaces |
+| `app.R` | Main Shiny app (~4900 lines) - used by HF Spaces |
 | `DE-LIMP.R` | Identical copy of app.R - for GitHub releases/local users |
 | `Dockerfile` | Docker container for HF Spaces and HPC deployment |
 | `UI_LAYOUT_SPEC.md` | Spec for v2.1 responsive UI layout refactoring |
@@ -220,7 +220,35 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 | Mobilogram files not detected | Pattern was `.mobilogram.parquet`; DIA-NN uses `_mobilogram.parquet` — already fixed |
 | Windows path separator in XIC regex | Already fixed: use `basename()` instead of literal `/` in regex |
 
-## Recent Changes (v2.1)
+## Recent Changes (v2.2)
+
+### 2026-02-17: Contextual Help System (15 Info Modals)
+1. **Pattern**: `actionButton("[id]_info_btn", icon("question-circle"), class="btn-outline-info btn-sm")` + `observeEvent(input$[id]_info_btn, { showModal(...) })`
+2. **Tabs with info buttons**: Normalization Diagnostic, DPC Fit, MDS Plot, Group Distribution, P-value Distribution, Signal Distribution, Expression Grid, DE Dashboard, High-Consistency Table, CV Distribution, QC Trends, GSEA (overview), GSEA Results Table, Methodology, Data Chat
+3. **DE Dashboard button** uses `btn-outline-light` (white on purple banner) instead of `btn-outline-info`
+
+### 2026-02-17: Volcano → Results Table Filtering
+1. `output$de_table` renderDT now filters by `values$plot_selected_proteins` when set (line ~3124)
+2. Row selection observer uses `isolate(values$plot_selected_proteins)` to index into filtered data (line ~3828)
+3. No reactive loop: table re-render resets `input$de_table_rows_selected` to NULL, but `req(length > 0)` prevents cascading update
+
+### 2026-02-17: UI Layout Fixes
+1. **Heatmap accordion**: `open = TRUE` (line ~855) — expanded by default
+2. **MDS Plot legend**: `legend("bottomright", bg = "white", box.col = "gray80")` — inside plot, no negative inset
+3. **Normalization Diagnostic**: "What am I looking at?" moved to modal (`norm_diag_info_btn`), `tags$details` removed
+4. **P-value Distribution**: "How do I interpret this?" moved to modal (`pvalue_hist_info_btn`), guidance banner moved below plot
+
+### 2026-02-17: Bad Merge Recovery
+1. Merge commit `1361b62` ("Merge alignment chart changes") dropped 333 lines from both files
+2. Lost: MS2 Intensity Alignment, XIC auto-load (`shinyjs::delay + shinyjs::click`), and other code
+3. Restored from `8f907a4` (correct pre-merge state with 4731 lines)
+
+### 2026-02-17: XIC Viewer Facet Guard
+1. Added empty data check before faceting in `output$xic_plot` (line ~4488)
+2. Returns "No chromatogram data available" placeholder if `xic_plot` has 0 rows or no `Fragment.Label` values
+3. Prevents "Faceting variables must have at least one value" warning on modal open
+
+## Previous Changes (v2.1)
 
 ### 2026-02-16: HF Environment Detection & Platform-Specific UI
 1. **`is_hf_space` flag** (line 147)
@@ -575,21 +603,11 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
    - Consistent rendering across zoom/pan operations
 
 ## Current TODO
-- [x] Volcano plot: Add FDR threshold annotation/legend ✅
 - [ ] GSEA: Add KEGG/Reactome enrichment; clarify which contrast is used
-- [x] DE Dashboard: Make comparison bar clickable to change contrasts ✅
 - [ ] Grid View: Open violin plot on protein click with bar plot toggle
-- [x] Consistent DE: Add CV histogram by condition ✅
-- [x] Data Overview: Show which comparison is used for signal distribution ✅
-- [x] Data Overview: Show DE protein counts per comparison ✅
-- [x] Move AI Summary to Data Overview tab ✅
 - [ ] Publication-quality plot exports (SVG/PNG/TIFF with size controls)
 - [ ] Sample correlation heatmap (QC Plots tab)
 - [ ] Venn diagram of significant proteins across comparisons
-- [x] P-value histogram diagnostic ✅
-- [x] P-value Distribution: Add comparison selector ✅
 - [ ] Sample CV distribution plots
 - [ ] Protein numbers bar plot per sample
 - [ ] Absence/presence table for on/off proteins
-- [x] XIC Viewer: On-demand chromatogram viewer for DE proteins ✅
-- [x] XIC Viewer: MS2 Intensity Alignment stacked bar chart with inconsistency detection ✅

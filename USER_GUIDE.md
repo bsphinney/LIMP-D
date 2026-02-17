@@ -4,9 +4,27 @@ Welcome to **DE-LIMP** (Differential Expression & Limpa Proteomics), your intera
 
 ---
 
-## ✨ What's New in v2.1 (February 2026)
+## ✨ What's New in v2.2 (February 2026)
 
-### XIC Chromatogram Viewer (NEW)
+### Contextual Help System (NEW)
+- **15 info modal buttons** across every major tab — click the `?` icon for in-context guidance
+- Each modal explains what the plot/table shows, what "good" and "bad" patterns look like, and actionable next steps
+- Covers: Normalization Diagnostic, DPC Fit, MDS Plot, Group Distribution, P-value Distribution, Signal Distribution, Expression Grid, DE Dashboard, Consistent DE, CV Distribution, QC Trends, GSEA (overview + column definitions), Methodology, and Data Chat
+
+### Improved DE Dashboard
+- **Volcano → Table filtering**: Selecting proteins in the volcano plot now automatically filters the results table to show only selected proteins
+- **MDS Plot legend**: Color-coded group legend now visible inside the plot (bottom-right with white background)
+- **Heatmap expanded by default**: DE Dashboard heatmap accordion opens expanded instead of collapsed
+
+### Cleaner Layouts
+- "What am I looking at?" (Normalization Diagnostic) and "How do I interpret this?" (P-value Distribution) moved from inline expandable sections to modal dialogs — no longer interfere with plots
+- P-value guidance banner moved below the plot so the comparison dropdown has space
+
+---
+
+## What's New in v2.1 (February 2026)
+
+### XIC Chromatogram Viewer
 - **Inspect fragment-level chromatograms** for any differentially expressed protein
 - Supports **DIA-NN 1.x and 2.x** XIC formats with automatic detection
 - **Split-axis MS1/MS2 view**: MS1 precursor on top, MS2 fragments below with independent y-axes

@@ -5,6 +5,31 @@ All notable changes to DE-LIMP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-02-17
+
+### Added
+- **Contextual Help System**: 15 info modal buttons (`?`) across all major tabs providing in-context guidance
+  - QC Plots: Normalization Diagnostic, DPC Fit, MDS Plot, Group Distribution, P-value Distribution
+  - Data Overview: Signal Distribution, Expression Grid
+  - DE Dashboard: Volcano/table interaction guide with threshold explanation
+  - Consistent DE: High-Consistency Table (%CV explained), CV Distribution
+  - QC Trends: Metric definitions, sort order explanation, drift detection tips
+  - Gene Set Enrichment: GSEA overview + Results Table column definitions (NES, p.adjust, etc.)
+  - Reproducibility: Methodology (LIMPA pipeline, limma/eBayes, covariates)
+  - Data Chat: Privacy info, API key instructions, selection integration
+- **Volcano Plot → Results Table Filtering**: Selecting proteins in the volcano plot now filters the results table to show only selected proteins (bidirectional sync)
+- **MDS Plot Legend**: Visible legend at bottom-right with white background box (was being clipped off-screen)
+- **Heatmap Expanded by Default**: DE Dashboard heatmap accordion now opens expanded
+
+### Changed
+- **Normalization Diagnostic**: "What am I looking at?" moved from in-page expandable to modal dialog (no longer interferes with plot)
+- **P-value Distribution**: "How do I interpret this?" moved from in-page expandable to modal dialog; guidance banner moved below plot (no longer overlaps comparison dropdown)
+
+### Fixed
+- **Bad Merge Recovery**: Restored 333 lines lost in merge commit `1361b62` including MS2 Intensity Alignment and XIC auto-load features
+- **XIC Viewer Facet Error**: Added guard for "Faceting variables must have at least one value" warning when modal first opens
+- **DE Table Row Index Mapping**: Fixed row selection observer to correctly index into filtered data when volcano selection is active
+
 ## [2.1.1] - 2026-02-16
 
 ### Added

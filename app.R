@@ -538,7 +538,9 @@ ui <- page_sidebar(
                     )
                   ),
                   # Control buttons
-                  div(style = "display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;",
+                  div(style = "display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 10px;",
+                    actionButton("signal_dist_info_btn", icon("question-circle"), title = "What is this?",
+                      class = "btn-outline-info btn-sm"),
                     actionButton("fullscreen_signal", "🔍 Fullscreen", class = "btn-outline-secondary btn-sm")
                   ),
                   plotOutput("protein_signal_plot", height = "calc(100vh - 370px)")
@@ -575,9 +577,13 @@ ui <- page_sidebar(
                     uiOutput("grid_file_map_ui")
                   ),
                   # Control buttons
-                  div(style = "margin-bottom: 10px;",
-                    actionButton("grid_reset_selection", "Show All / Clear Selection", class = "btn-warning btn-sm"),
-                    downloadButton("download_grid_data", "💾 Export Full Table", class = "btn-success btn-sm")
+                  div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;",
+                    div(
+                      actionButton("grid_reset_selection", "Show All / Clear Selection", class = "btn-warning btn-sm"),
+                      downloadButton("download_grid_data", "💾 Export Full Table", class = "btn-success btn-sm")
+                    ),
+                    actionButton("expression_grid_info_btn", icon("question-circle"), title = "What is this?",
+                      class = "btn-outline-info btn-sm")
                   ),
                   # Grid table
                   DTOutput("grid_view_table")
@@ -622,16 +628,20 @@ ui <- page_sidebar(
     nav_panel("QC Trends", icon = icon("chart-bar"),
               # Global sort order control
               div(style = "background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px;",
-                div(style = "display: flex; align-items: center; gap: 15px;",
-                  icon("sort", style = "color: #6c757d;"),
-                  strong("Sort Order:"),
-                  radioButtons("qc_sort_order", NULL,
-                    choices = c("Run Order", "Group"),
-                    inline = TRUE,
-                    selected = "Run Order"
+                div(style = "display: flex; align-items: center; justify-content: space-between;",
+                  div(style = "display: flex; align-items: center; gap: 15px;",
+                    icon("sort", style = "color: #6c757d;"),
+                    strong("Sort Order:"),
+                    radioButtons("qc_sort_order", NULL,
+                      choices = c("Run Order", "Group"),
+                      inline = TRUE,
+                      selected = "Run Order"
+                    ),
+                    span(style = "color: #6c757d; font-size: 0.85em;",
+                      "(Applies to all metric tabs)")
                   ),
-                  span(style = "color: #6c757d; font-size: 0.85em;",
-                    "(Applies to all metric tabs)")
+                  actionButton("qc_trends_info_btn", icon("question-circle"), title = "What are QC Trends?",
+                    class = "btn-outline-info btn-sm")
                 )
               ),
 
@@ -693,50 +703,16 @@ ui <- page_sidebar(
                           inline = TRUE
                         )
                       ),
-                      actionButton("fullscreen_norm_diag", "\U0001F50D Fullscreen",
-                        class = "btn-outline-secondary btn-sm")
+                      div(style = "display: flex; gap: 8px;",
+                        actionButton("norm_diag_info_btn", icon("question-circle"), title = "What am I looking at?",
+                          class = "btn-outline-info btn-sm"),
+                        actionButton("fullscreen_norm_diag", "\U0001F50D Fullscreen",
+                          class = "btn-outline-secondary btn-sm")
+                      )
                     ),
 
                     # Plot with viewport height
-                    plotlyOutput("norm_diagnostic_plot", height = "calc(100vh - 380px)"),
-
-                    # Expandable help
-                    tags$details(
-                      tags$summary(style = "cursor: pointer; color: #0d6efd; font-size: 0.9em; margin-top: 10px;",
-                        icon("question-circle"), " What am I looking at?"
-                      ),
-                      div(style = "background-color: #f8f9fa; padding: 12px; border-radius: 5px;
-                                   margin-top: 8px; font-size: 0.85em; line-height: 1.6;",
-                        tags$h6("Reading this plot"),
-                        p("Each box (or density curve) represents one sample's intensity distribution \u2014 ",
-                          "essentially, how bright all the detected peptides/proteins are in that sample."),
-                        p(strong("Left panel: "), "What DIA-NN gave us. These are the peptide-level intensities ",
-                          "after DIA-NN's normalization (if it was enabled). ",
-                          strong("Right panel: "), "What our pipeline produced. These are the final protein-level ",
-                          "estimates after aggregating peptides and handling missing values."),
-                        tags$h6("What 'good' looks like"),
-                        p("The boxes (or curves) should sit at roughly the same height across all samples. ",
-                          "Small differences are normal. If one sample is dramatically higher or lower than ",
-                          "the rest, that sample may be problematic."),
-                        tags$h6("What 'bad' looks like"),
-                        p("If all the boxes are at very different heights, your samples aren't comparable ",
-                          "and the statistical results may not be reliable. The most common cause is that ",
-                          "DIA-NN normalization was turned off when the data was processed."),
-                        tags$h6("Why doesn't the right panel 'fix' bad data?"),
-                        p("Unlike some other tools, this pipeline does not apply its own normalization. ",
-                          "The protein quantification step (DPC-Quant) aggregates peptides into proteins and ",
-                          "handles missing values, but it ",
-                          strong("trusts the input intensities as-is"), ". ",
-                          "If the input is unnormalized, the output will be too. ",
-                          "Normalization happens in DIA-NN, before the data reaches this tool."),
-                        tags$h6("The DIA-NN normalization badge"),
-                        p("The badge at the top of this plot tells you whether DIA-NN applied normalization ",
-                          "to your data. ",
-                          tags$span(class = "badge bg-info", "ON"), " = DIA-NN's RT-dependent normalization was active (recommended). ",
-                          tags$span(class = "badge bg-warning", "OFF"), " = Data was exported without normalization. ",
-                          tags$span(class = "badge bg-secondary", "Unknown"), " = Couldn't determine (older DIA-NN version or non-standard export).")
-                      )
-                    )
+                    plotlyOutput("norm_diagnostic_plot", height = "calc(100vh - 340px)")
                   )
                 ),
 
@@ -744,7 +720,9 @@ ui <- page_sidebar(
                 nav_panel("DPC Fit",
                   icon = icon("chart-scatter"),
                   card_body(
-                    div(style = "text-align: right; margin-bottom: 10px;",
+                    div(style = "display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px;",
+                      actionButton("dpc_info_btn", icon("question-circle"), title = "What is DPC Fit?",
+                        class = "btn-outline-info btn-sm"),
                       actionButton("fullscreen_dpc", "\U0001F50D Fullscreen",
                         class = "btn-outline-secondary btn-sm")
                     ),
@@ -756,7 +734,9 @@ ui <- page_sidebar(
                 nav_panel("MDS Plot",
                   icon = icon("project-diagram"),
                   card_body(
-                    div(style = "text-align: right; margin-bottom: 10px;",
+                    div(style = "display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px;",
+                      actionButton("mds_info_btn", icon("question-circle"), title = "What is MDS?",
+                        class = "btn-outline-info btn-sm"),
                       actionButton("fullscreen_mds", "\U0001F50D Fullscreen",
                         class = "btn-outline-secondary btn-sm")
                     ),
@@ -773,8 +753,12 @@ ui <- page_sidebar(
                         choices = c("Precursors", "Proteins", "MS1_Signal"),
                         width = "200px"
                       ),
-                      actionButton("fullscreen_qc_violin", "\U0001F50D Fullscreen",
-                        class = "btn-outline-secondary btn-sm")
+                      div(style = "display: flex; gap: 8px;",
+                        actionButton("group_dist_info_btn", icon("question-circle"), title = "What is this?",
+                          class = "btn-outline-info btn-sm"),
+                        actionButton("fullscreen_qc_violin", "\U0001F50D Fullscreen",
+                          class = "btn-outline-secondary btn-sm")
+                      )
                     ),
                     plotlyOutput("qc_group_violin", height = "calc(100vh - 320px)")
                   )
@@ -797,54 +781,19 @@ ui <- page_sidebar(
                     )
                   ),
                   card_body(
-                    # Automated contextual guidance (changes based on detected pattern)
-                    uiOutput("pvalue_guidance"),
-
                     # Control row
-                    div(style = "display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;",
+                    div(style = "display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 10px;",
+                      actionButton("pvalue_hist_info_btn", icon("question-circle"), title = "How do I interpret this?",
+                        class = "btn-outline-info btn-sm"),
                       actionButton("fullscreen_pvalue_hist", "\U0001F50D Fullscreen",
                         class = "btn-outline-secondary btn-sm")
                     ),
 
                     # Plot
-                    plotOutput("pvalue_histogram", height = "calc(100vh - 450px)"),
+                    plotOutput("pvalue_histogram", height = "calc(100vh - 400px)"),
 
-                    # Expandable interpretation guide
-                    tags$details(
-                      tags$summary(style = "cursor: pointer; color: #0d6efd; font-size: 0.9em; margin-top: 10px;",
-                        icon("question-circle"), " How do I interpret this?"
-                      ),
-                      div(style = "background-color: #f8f9fa; padding: 12px; border-radius: 5px;
-                                   margin-top: 8px; font-size: 0.85em; line-height: 1.6;",
-                        tags$h6("What this plot shows"),
-                        p("This histogram displays the distribution of raw (unadjusted) p-values from your differential expression analysis. ",
-                          "Each bar represents how many proteins have p-values falling in that range."),
-
-                        tags$h6("What 'good' looks like"),
-                        tags$ul(
-                          tags$li(strong("Flat with a spike at zero: "), "Most p-values uniformly distributed (flat histogram) with a peak near p=0. ",
-                            "This indicates a mix of non-changing proteins (uniform) and true positives (spike at zero)."),
-                          tags$li(strong("Expected under the null: "), "For proteins that are truly not changing, p-values should be uniformly distributed between 0 and 1. ",
-                            "The dashed red line shows this expected uniform distribution.")
-                        ),
-
-                        tags$h6("Warning signs"),
-                        tags$ul(
-                          tags$li(strong("Too many intermediate p-values (0.3-0.7): "), "May indicate p-value inflation due to unmodeled variance, batch effects, or outliers."),
-                          tags$li(strong("Depletion near zero: "), "Too few small p-values suggests the test is overly conservative or lacks statistical power."),
-                          tags$li(strong("U-shaped distribution: "), "Enrichment at both ends (near 0 and 1) can indicate problems with the statistical model or data quality."),
-                          tags$li(strong("Completely uniform: "), "No enrichment at p=0 means no differential expression detected, or the test has no power.")
-                        ),
-
-                        tags$h6("What to do if it looks wrong"),
-                        tags$ul(
-                          tags$li("Check the Normalization Diagnostic tab to ensure samples are properly normalized"),
-                          tags$li("Review the MDS plot for outlier samples or unwanted variation"),
-                          tags$li("Consider adding batch or other covariates to the model if appropriate"),
-                          tags$li("Verify that sample sizes are adequate for the comparison")
-                        )
-                      )
-                    )
+                    # Automated contextual guidance (below plot, away from dropdown)
+                    uiOutput("pvalue_guidance")
                   )
                 )
               )
@@ -853,14 +802,19 @@ ui <- page_sidebar(
     nav_panel("DE Dashboard", icon = icon("table-columns"),
               # Interactive comparison selector
               div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;",
-                div(style = "display: flex; align-items: center; gap: 15px;",
-                  icon("microscope"),
-                  span("Viewing Comparison:", style = "font-weight: 500;"),
-                  selectInput("contrast_selector",
-                    label = NULL,
-                    choices = NULL,
-                    width = "300px"
-                  )
+                div(style = "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;",
+                  div(style = "display: flex; align-items: center; gap: 15px;",
+                    icon("microscope"),
+                    span("Viewing Comparison:", style = "font-weight: 500;"),
+                    selectInput("contrast_selector",
+                      label = NULL,
+                      choices = NULL,
+                      width = "300px"
+                    )
+                  ),
+                  actionButton("de_dashboard_info_btn", icon("question-circle"),
+                    title = "How to use this dashboard",
+                    class = "btn-outline-light btn-sm")
                 )
               ),
 
@@ -902,7 +856,7 @@ ui <- page_sidebar(
               # Heatmap as accordion (secondary visualization, collapsed by default)
               accordion(
                 id = "de_heatmap_accordion",
-                open = FALSE,
+                open = TRUE,
                 accordion_panel(
                   "Heatmap of Selected/Top Proteins",
                   icon = icon("grip"),
@@ -922,8 +876,12 @@ ui <- page_sidebar(
                 nav_panel("High-Consistency Table",
                   icon = icon("table"),
                   card_body(
-                    p("Ranking by %CV (Coefficient of Variation) to find stable markers across all experimental groups.",
-                      class = "text-muted small mb-3"),
+                    div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;",
+                      p("Ranking by %CV (Coefficient of Variation) to find stable markers across all experimental groups.",
+                        class = "text-muted small mb-0"),
+                      actionButton("consistent_de_info_btn", icon("question-circle"), title = "What is this?",
+                        class = "btn-outline-info btn-sm")
+                    ),
                     DTOutput("consistent_table")
                   )
                 ),
@@ -936,8 +894,12 @@ ui <- page_sidebar(
                     div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;",
                       p("Distribution of Coefficient of Variation (CV) for significant proteins, broken down by experimental group.",
                         class = "text-muted small mb-0"),
-                      actionButton("fullscreen_cv_hist", "\U0001F50D Fullscreen",
-                        class = "btn-outline-secondary btn-sm")
+                      div(style = "display: flex; gap: 8px;",
+                        actionButton("cv_dist_info_btn", icon("question-circle"), title = "What is this?",
+                          class = "btn-outline-info btn-sm"),
+                        actionButton("fullscreen_cv_hist", "\U0001F50D Fullscreen",
+                          class = "btn-outline-secondary btn-sm")
+                      )
                     ),
                     plotOutput("cv_histogram", height = "calc(100vh - 320px)")
                   )
@@ -966,6 +928,10 @@ ui <- page_sidebar(
                 ),
                 nav_panel("Methodology",
                           card_body(
+                            div(style = "display: flex; justify-content: flex-end; margin-bottom: 10px;",
+                              actionButton("methodology_info_btn", icon("question-circle"), title = "About the methods",
+                                class = "btn-outline-info btn-sm")
+                            ),
                             verbatimTextOutput("methodology_text")
                           )
                 )
@@ -981,7 +947,9 @@ ui <- page_sidebar(
                     div(style = "flex-grow: 1;",
                       verbatimTextOutput("gsea_status", placeholder = TRUE) |>
                         tagAppendAttributes(style = "margin: 0; padding: 5px 10px; min-height: 38px;")
-                    )
+                    ),
+                    actionButton("gsea_info_btn", icon("question-circle"), title = "What is GSEA?",
+                      class = "btn-outline-info btn-sm")
                   ),
                   p("Performs Gene Ontology enrichment analysis on DE results. Auto-detects organism (Human/Mouse).",
                     class = "text-muted small", style = "margin: 10px 0 0 0;")
@@ -1014,6 +982,10 @@ ui <- page_sidebar(
                 ),
 
                 nav_panel("Results Table",
+                  div(style = "display: flex; justify-content: flex-end; margin-bottom: 10px;",
+                    actionButton("gsea_table_info_btn", icon("question-circle"), title = "Column definitions",
+                      class = "btn-outline-info btn-sm")
+                  ),
                   DTOutput("gsea_results_table")
                 )
               )
@@ -1021,7 +993,14 @@ ui <- page_sidebar(
     
     nav_panel("Data Chat", icon = icon("comments"),
               card(
-                card_header(div(style="display: flex; justify-content: space-between; align-items: center;", span("Chat with Full Data (QC + Expression)"), downloadButton("download_chat_txt", "💾 Save Chat", class="btn-secondary btn-sm"))),
+                card_header(div(style="display: flex; justify-content: space-between; align-items: center;",
+                  span("Chat with Full Data (QC + Expression)"),
+                  div(style = "display: flex; gap: 8px;",
+                    actionButton("data_chat_info_btn", icon("question-circle"), title = "About Data Chat",
+                      class = "btn-outline-info btn-sm"),
+                    downloadButton("download_chat_txt", "💾 Save Chat", class="btn-secondary btn-sm")
+                  )
+                )),
                 card_body(
                   verbatimTextOutput("chat_selection_indicator"),
                   uiOutput("chat_window"),
@@ -2390,8 +2369,11 @@ server <- function(input, output, session) {
   
   output$mds_plot <- renderPlot({
     req(values$y_protein, values$metadata)
-    meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]; grps <- factor(meta$Group); cols <- rainbow(length(levels(grps)))
-    par(xpd = TRUE); limpa::plotMDSUsingSEs(values$y_protein, pch=16, main="MDS Plot", col=cols[grps]); legend(x = "right", inset = c(-0.2, 0), legend=levels(grps), col=cols, pch=16, bty = "n")
+    meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]
+    grps <- factor(meta$Group); cols <- rainbow(length(levels(grps)))
+    limpa::plotMDSUsingSEs(values$y_protein, pch = 16, main = "MDS Plot", col = cols[grps])
+    legend("bottomright", legend = levels(grps), col = cols, pch = 16,
+           bg = "white", box.col = "gray80", cex = 0.9)
   }) # Height controlled by UI (70vh)
 
   # ============================================================================
@@ -2628,6 +2610,128 @@ server <- function(input, output, session) {
 
   output$norm_diagnostic_plot_fullscreen <- renderPlotly({ generate_norm_diagnostic_plot() })
 
+  observeEvent(input$norm_diag_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What am I looking at?"),
+      size = "l",
+      easyClose = TRUE,
+      footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("Reading this plot"),
+        p("Each box (or density curve) represents one sample's intensity distribution \u2014 ",
+          "essentially, how bright all the detected peptides/proteins are in that sample."),
+        p(strong("Left panel: "), "What DIA-NN gave us. These are the peptide-level intensities ",
+          "after DIA-NN's normalization (if it was enabled). ",
+          strong("Right panel: "), "What our pipeline produced. These are the final protein-level ",
+          "estimates after aggregating peptides and handling missing values."),
+        tags$h6("What 'good' looks like"),
+        p("The boxes (or curves) should sit at roughly the same height across all samples. ",
+          "Small differences are normal. If one sample is dramatically higher or lower than ",
+          "the rest, that sample may be problematic."),
+        tags$h6("What 'bad' looks like"),
+        p("If all the boxes are at very different heights, your samples aren't comparable ",
+          "and the statistical results may not be reliable. The most common cause is that ",
+          "DIA-NN normalization was turned off when the data was processed."),
+        tags$h6("Why doesn't the right panel 'fix' bad data?"),
+        p("Unlike some other tools, this pipeline does not apply its own normalization. ",
+          "The protein quantification step (DPC-Quant) aggregates peptides into proteins and ",
+          "handles missing values, but it ",
+          strong("trusts the input intensities as-is"), ". ",
+          "If the input is unnormalized, the output will be too. ",
+          "Normalization happens in DIA-NN, before the data reaches this tool."),
+        tags$h6("The DIA-NN normalization badge"),
+        p("The badge next to the plot controls tells you whether DIA-NN applied normalization to your data. ",
+          tags$span(class = "badge bg-info", "ON"), " = DIA-NN's RT-dependent normalization was active (recommended). ",
+          tags$span(class = "badge bg-warning", "OFF"), " = Data was exported without normalization. ",
+          tags$span(class = "badge bg-secondary", "Unknown"), " = Couldn't determine (older DIA-NN version or non-standard export).")
+      )
+    ))
+  })
+
+  # --- DPC Fit Info Modal ---
+  observeEvent(input$dpc_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What is DPC Fit?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("Data Point Correspondence (DPC)"),
+        p("DPC is the normalization and quantification method used by the LIMPA pipeline. ",
+          "It models the relationship between peptide-level measurements and protein-level estimates, ",
+          "accounting for missing values and variable peptide behavior."),
+        tags$h6("What this plot shows"),
+        p("The DPC fit plot visualizes how well the model fits your data. Each point represents a peptide-protein ",
+          "relationship, and the fitted curve shows the expected correspondence."),
+        tags$h6("What 'good' looks like"),
+        tags$ul(
+          tags$li("Points should cluster tightly around the fitted line"),
+          tags$li("No strong systematic deviations or outlier clusters"),
+          tags$li("The fit should be smooth without sharp jumps")
+        ),
+        tags$h6("What 'bad' looks like"),
+        tags$ul(
+          tags$li("Large scatter around the fitted line suggests noisy data or poor peptide-to-protein mapping"),
+          tags$li("Systematic curvature away from the fit may indicate batch effects or normalization issues"),
+          tags$li("Distinct outlier clusters could indicate contaminated samples or misassigned peptides")
+        )
+      )
+    ))
+  })
+
+  # --- MDS Plot Info Modal ---
+  observeEvent(input$mds_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What is the MDS Plot?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("Multidimensional Scaling (MDS)"),
+        p("MDS reduces the high-dimensional protein expression data into two dimensions so you can ",
+          "visualize how similar or different your samples are. Think of it as a map where samples ",
+          "that are biologically similar appear close together."),
+        tags$h6("What 'good' looks like"),
+        tags$ul(
+          tags$li("Samples from the same experimental group cluster together"),
+          tags$li("Different groups are clearly separated"),
+          tags$li("Replicates within a group are tightly clustered")
+        ),
+        tags$h6("What 'bad' looks like"),
+        tags$ul(
+          tags$li(strong("One sample far from its group: "), "Possible outlier \u2014 check sample quality, injection issues, or mislabeling"),
+          tags$li(strong("Groups overlap completely: "), "Little biological difference between conditions, or high technical variability masking real signal"),
+          tags$li(strong("Samples cluster by batch, not group: "), "Batch effect \u2014 consider adding batch as a covariate in the model")
+        ),
+        tags$h6("Reading the axes"),
+        p("The axes show 'leading z-statistic dimensions' with the percentage of variance explained in parentheses. ",
+          "Dimension 1 (x-axis) captures the largest source of variation, dimension 2 (y-axis) the second largest. ",
+          "High percentage on dim 1 means most variation is along that axis.")
+      )
+    ))
+  })
+
+  # --- Group Distribution Info Modal ---
+  observeEvent(input$group_dist_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What is the Group Distribution?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("Group-level QC Violin Plots"),
+        p("These violin plots show the distribution of a QC metric across your experimental groups. ",
+          "The width of the violin indicates how many samples have that value \u2014 wider means more samples."),
+        tags$h6("Available metrics"),
+        tags$ul(
+          tags$li(strong("Precursors: "), "Number of peptide precursors identified per sample. More = better sensitivity."),
+          tags$li(strong("Proteins: "), "Number of proteins quantified per sample. Should be consistent across groups."),
+          tags$li(strong("MS1 Signal: "), "Overall MS1 intensity. Large differences may indicate loading or injection issues.")
+        ),
+        tags$h6("What to look for"),
+        tags$ul(
+          tags$li("Groups should have similar distributions (overlapping violins)"),
+          tags$li("A group with consistently lower values may have systematic quality issues"),
+          tags$li("Individual outlier dots indicate samples worth investigating in more detail")
+        )
+      )
+    ))
+  })
+
   # ============================================================================
   #      Fullscreen Modals for All Plot Panels
   # ============================================================================
@@ -2713,9 +2817,9 @@ server <- function(input, output, session) {
     req(values$y_protein, values$metadata)
     meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]
     grps <- factor(meta$Group); cols <- rainbow(length(levels(grps)))
-    par(xpd = TRUE)
     limpa::plotMDSUsingSEs(values$y_protein, pch = 16, main = "MDS Plot", col = cols[grps])
-    legend(x = "right", inset = c(-0.15, 0), legend = levels(grps), col = cols, pch = 16, bty = "n")
+    legend("bottomright", legend = levels(grps), col = cols, pch = 16,
+           bg = "white", box.col = "gray80", cex = 0.9)
   }, height = 700)
 
   # --- 4. Group QC Distribution Violin (QC Plots) ---
@@ -2923,6 +3027,292 @@ server <- function(input, output, session) {
   })
 
   # Fullscreen modal for p-value histogram
+  observeEvent(input$pvalue_hist_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " How do I interpret this?"),
+      size = "l",
+      easyClose = TRUE,
+      footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("What this plot shows"),
+        p("This histogram displays the distribution of raw (unadjusted) p-values from your differential expression analysis. ",
+          "Each bar represents how many proteins have p-values falling in that range."),
+        tags$h6("What 'good' looks like"),
+        tags$ul(
+          tags$li(strong("Flat with a spike at zero: "), "Most p-values uniformly distributed (flat histogram) with a peak near p=0. ",
+            "This indicates a mix of non-changing proteins (uniform) and true positives (spike at zero)."),
+          tags$li(strong("Expected under the null: "), "For proteins that are truly not changing, p-values should be uniformly distributed between 0 and 1. ",
+            "The dashed red line shows this expected uniform distribution.")
+        ),
+        tags$h6("Warning signs"),
+        tags$ul(
+          tags$li(strong("Too many intermediate p-values (0.3-0.7): "), "May indicate p-value inflation due to unmodeled variance, batch effects, or outliers."),
+          tags$li(strong("Depletion near zero: "), "Too few small p-values suggests the test is overly conservative or lacks statistical power."),
+          tags$li(strong("U-shaped distribution: "), "Enrichment at both ends (near 0 and 1) can indicate problems with the statistical model or data quality."),
+          tags$li(strong("Completely uniform: "), "No enrichment at p=0 means no differential expression detected, or the test has no power.")
+        ),
+        tags$h6("What to do if it looks wrong"),
+        tags$ul(
+          tags$li("Check the Normalization Diagnostic tab to ensure samples are properly normalized"),
+          tags$li("Review the MDS plot for outlier samples or unwanted variation"),
+          tags$li("Consider adding batch or other covariates to the model if appropriate"),
+          tags$li("Verify that sample sizes are adequate for the comparison")
+        )
+      )
+    ))
+  })
+
+  # --- DE Dashboard Info Modal ---
+  observeEvent(input$de_dashboard_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " How to Use the DE Dashboard"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("The Volcano Plot"),
+        p("The volcano plot displays all proteins, with log2 fold-change (effect size) on the x-axis and ",
+          "-log10 adjusted p-value (statistical significance) on the y-axis. Proteins further from the center ",
+          "and higher up are the most interesting."),
+        tags$ul(
+          tags$li(strong("Click"), " a point to select that protein"),
+          tags$li(strong("Box-select"), " (drag) to select multiple proteins"),
+          tags$li("Selected proteins are highlighted and the results table filters to show only those proteins")
+        ),
+        tags$h6("The Results Table"),
+        tags$ul(
+          tags$li(strong("Gene: "), "Gene symbol (auto-mapped from UniProt accession)"),
+          tags$li(strong("Protein Name: "), "Clickable link to UniProt entry"),
+          tags$li(strong("logFC: "), "Log2 fold-change between groups. Positive = higher in first group, negative = higher in second group"),
+          tags$li(strong("adj.P.Val: "), "FDR-adjusted p-value (Benjamini-Hochberg). Below 0.05 = statistically significant")
+        ),
+        p("Click rows to select proteins for violin plots, XICs, or heatmap visualization."),
+        tags$h6("Threshold Legend"),
+        p("The colored lines on the volcano plot show your current significance thresholds: ",
+          "blue horizontal line = FDR 0.05, orange vertical lines = fold-change cutoff (adjustable via sidebar slider).")
+      )
+    ))
+  })
+
+  # --- Signal Distribution Info Modal ---
+  observeEvent(input$signal_dist_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What is Signal Distribution?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("What this shows"),
+        p("This boxplot displays the overall protein expression distribution for each sample. ",
+          "Each box represents one sample's intensity values across all quantified proteins."),
+        tags$h6("DE Coloring"),
+        p("When differential expression results are available, samples are colored by the currently selected ",
+          "comparison. This helps you visually verify that the groups being compared have distinguishable expression patterns."),
+        tags$h6("What to look for"),
+        tags$ul(
+          tags$li("Boxes should be at roughly the same height \u2014 large shifts indicate normalization issues"),
+          tags$li("Samples in the same group should have similar medians"),
+          tags$li("Outlier samples (dramatically different from their group) may need investigation")
+        )
+      )
+    ))
+  })
+
+  # --- Expression Grid Info Modal ---
+  observeEvent(input$expression_grid_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What is the Expression Grid?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("What this shows"),
+        p("The expression grid is a table of all differentially expressed proteins with their expression values ",
+          "across all samples. It provides a complete view of the data behind the statistical results."),
+        tags$h6("How to interact"),
+        tags$ul(
+          tags$li(strong("Click a row"), " to open a violin plot showing that protein's expression across groups"),
+          tags$li(strong("Color coding: "), "Expression values are colored from blue (low) through white to red (high)"),
+          tags$li(strong("File map: "), "Sample column headers are abbreviated \u2014 the file map above the table shows the full sample names"),
+          tags$li(strong("Export: "), "Download the full table as CSV for external analysis")
+        ),
+        tags$h6("Comparison selector"),
+        p("The purple banner controls which comparison's DE results are shown. Changing it updates which proteins ",
+          "appear in the grid (only those significant in the selected comparison).")
+      )
+    ))
+  })
+
+  # --- Consistent DE Info Modal ---
+  observeEvent(input$consistent_de_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What is the Consistency Table?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("What is %CV?"),
+        p("The Coefficient of Variation (CV) measures how consistent a protein's expression is within each group. ",
+          "It's calculated as (standard deviation / mean) \u00d7 100. Lower CV = more reproducible measurement."),
+        tags$h6("Why this matters"),
+        p("A protein that is differentially expressed AND has low CV across replicates is a stronger biomarker candidate. ",
+          "High CV means the measurement is noisy and the DE result may not be reproducible."),
+        tags$h6("Reading the table"),
+        tags$ul(
+          tags$li("Proteins are ranked by average %CV across all groups (lowest first)"),
+          tags$li("Each group's %CV is shown in its own column"),
+          tags$li(strong("Top candidates: "), "Significant proteins (adj.P.Val < 0.05) with %CV < 20% in all groups")
+        )
+      )
+    ))
+  })
+
+  # --- CV Distribution Info Modal ---
+  observeEvent(input$cv_dist_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What is the CV Distribution?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("What this shows"),
+        p("This histogram displays the distribution of CV values for all significant proteins, ",
+          "faceted by experimental group. The dashed vertical line marks the average CV for each group."),
+        tags$h6("What to look for"),
+        tags$ul(
+          tags$li(strong("Peak position: "), "Where most proteins fall. Lower is better \u2014 most proteins should have CV < 30%."),
+          tags$li(strong("Long right tail: "), "A few proteins with very high CV. These may be unreliable or biologically variable."),
+          tags$li(strong("Group comparison: "), "If one group has consistently higher CVs, it may have more technical variability or biological heterogeneity.")
+        ),
+        tags$h6("Typical values"),
+        p("In well-controlled proteomics experiments, most proteins have CV < 20-30%. ",
+          "CVs above 50% suggest the measurement is highly variable for that protein.")
+      )
+    ))
+  })
+
+  # --- QC Trends Info Modal ---
+  observeEvent(input$qc_trends_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What are QC Trends?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("What these plots show"),
+        p("QC trend plots track key quality metrics across all samples in your experiment. ",
+          "They help identify systematic issues like instrument drift, sample degradation, or injection problems."),
+        tags$h6("The metrics"),
+        tags$ul(
+          tags$li(strong("Precursors: "), "Number of peptide precursors identified. A sudden drop may indicate instrument issues or sample problems."),
+          tags$li(strong("Proteins: "), "Number of proteins quantified. Should be relatively stable across runs."),
+          tags$li(strong("MS1 Signal: "), "Overall MS1 intensity. Gradual decline may indicate column degradation or source contamination.")
+        ),
+        tags$h6("Sort order"),
+        p(strong("Run Order"), " shows samples in the order they were acquired \u2014 useful for spotting instrument drift over time. ",
+          strong("Group"), " sorts by experimental condition \u2014 useful for comparing groups side by side."),
+        tags$h6("What to look for"),
+        tags$ul(
+          tags$li("Stable, flat trends are ideal"),
+          tags$li("Sudden drops or spikes in individual samples flag potential outliers"),
+          tags$li("Gradual downward trends may indicate column or instrument degradation")
+        )
+      )
+    ))
+  })
+
+  # --- GSEA Info Modal ---
+  observeEvent(input$gsea_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " What is Gene Set Enrichment Analysis?"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("What is GSEA?"),
+        p("Gene Set Enrichment Analysis tests whether predefined groups of genes (e.g., biological pathways) ",
+          "show coordinated changes in your experiment. Instead of looking at individual proteins, ",
+          "it asks: 'Are proteins in this pathway collectively going up or down?'"),
+        tags$h6("Gene Ontology (GO)"),
+        p("This analysis uses GO Biological Process terms \u2014 curated annotations describing what biological functions ",
+          "genes are involved in (e.g., 'cell division', 'immune response', 'protein folding')."),
+        tags$h6("The visualization tabs"),
+        tags$ul(
+          tags$li(strong("Dot Plot: "), "Each dot = one enriched pathway. Size = number of genes, color = adjusted p-value. X-axis shows gene ratio (fraction of pathway genes affected)."),
+          tags$li(strong("Enrichment Map: "), "Network showing how enriched pathways relate to each other. Connected pathways share genes."),
+          tags$li(strong("Ridgeplot: "), "Density curves showing the fold-change distribution of genes within each enriched pathway."),
+          tags$li(strong("Results Table: "), "Full numeric results with statistics for each pathway.")
+        ),
+        tags$h6("Which comparison is used?"),
+        p("GSEA uses the currently selected comparison from the DE Dashboard. ",
+          "Change the comparison selector on the DE Dashboard to run GSEA on a different contrast.")
+      )
+    ))
+  })
+
+  # --- GSEA Results Table Info Modal ---
+  observeEvent(input$gsea_table_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " GSEA Results Table Columns"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("Column definitions"),
+        tags$ul(
+          tags$li(strong("ID: "), "Gene Ontology accession (e.g., GO:0006955)"),
+          tags$li(strong("Description: "), "Human-readable name of the biological process"),
+          tags$li(strong("setSize: "), "Number of genes in this pathway that were measured in your data"),
+          tags$li(strong("enrichmentScore: "), "Running enrichment score \u2014 reflects degree of overrepresentation at the top or bottom of the ranked gene list"),
+          tags$li(strong("NES: "), "Normalized Enrichment Score \u2014 accounts for pathway size. Positive = enriched in up-regulated genes, negative = enriched in down-regulated genes"),
+          tags$li(strong("pvalue: "), "Raw p-value from the enrichment test"),
+          tags$li(strong("p.adjust: "), "FDR-adjusted p-value (Benjamini-Hochberg). Below 0.05 = statistically significant"),
+          tags$li(strong("rank: "), "Position in the ranked gene list where the enrichment score peaks")
+        )
+      )
+    ))
+  })
+
+  # --- Methodology Info Modal ---
+  observeEvent(input$methodology_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " About the Statistical Methods"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("The LIMPA Pipeline"),
+        p("This app uses the LIMPA (LIMma for Proteomics Analysis) package, which adapts the widely-used ",
+          "limma framework from genomics for proteomics data."),
+        tags$h6("Key steps"),
+        tags$ul(
+          tags$li(strong("DPC Normalization: "), "Data Point Correspondence handles peptide-to-protein aggregation and missing value estimation"),
+          tags$li(strong("Linear model: "), "limma fits a linear model to each protein's expression across groups"),
+          tags$li(strong("Empirical Bayes (eBayes): "), "Borrows information across proteins to stabilize variance estimates, especially helpful with small sample sizes"),
+          tags$li(strong("FDR correction: "), "Benjamini-Hochberg adjustment controls the false discovery rate at 5%")
+        ),
+        tags$h6("Why limma?"),
+        p("limma has been the gold standard for differential expression analysis for over 20 years. ",
+          "Its empirical Bayes approach is particularly powerful for proteomics where sample sizes are often small ",
+          "and variance estimates for individual proteins are noisy."),
+        tags$h6("Covariates"),
+        p("If batch, instrument, or other covariates were specified during group assignment, they are included in the linear model ",
+          "to remove their effects before testing for group differences.")
+      )
+    ))
+  })
+
+  # --- Data Chat Info Modal ---
+  observeEvent(input$data_chat_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " About Data Chat"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("How it works"),
+        p("Data Chat uses the Google Gemini API to provide AI-powered analysis of your proteomics data. ",
+          "Your QC statistics and the top 800 proteins are uploaded to Gemini for context-aware responses."),
+        tags$h6("What data is sent"),
+        tags$ul(
+          tags$li("QC statistics (precursor counts, protein counts, MS1 signal per sample)"),
+          tags$li("Top 800 DE proteins with fold-changes and p-values"),
+          tags$li("Your chat messages")
+        ),
+        tags$h6("Privacy"),
+        p("Data is sent to Google's Gemini API. It is processed according to Google's API terms of service. ",
+          "No data is stored permanently by this app \u2014 uploaded files are deleted when your session ends."),
+        tags$h6("Plot selection integration"),
+        p("If you select proteins in the volcano plot or results table, the chat knows about your selection. ",
+          "The AI can also suggest proteins to highlight \u2014 look for the ",
+          tags$em("'I have updated your plots'"), " message after AI responses."),
+        tags$h6("API key"),
+        p("You need a Google Gemini API key (enter in the sidebar). Get one free at ",
+          tags$a(href = "https://aistudio.google.com/apikey", target = "_blank", "Google AI Studio"), ".")
+      )
+    ))
+  })
+
   observeEvent(input$fullscreen_pvalue_hist, {
     req(values$fit, input$contrast_selector_pvalue)
 
@@ -3121,7 +3511,11 @@ server <- function(input, output, session) {
     df_full$Significance <- "Not Sig"
     df_full$Significance[df_full$adj.P.Val < 0.05 & abs(df_full$logFC) > input$logfc_cutoff] <- "Significant"
 
-    # Prepare display (don't filter, keep all rows for multi-select)
+    # Filter to selected proteins from volcano/AI selection
+    if (!is.null(values$plot_selected_proteins) && length(values$plot_selected_proteins) > 0) {
+      df_full <- df_full %>% filter(Protein.Group %in% values$plot_selected_proteins)
+    }
+
     df_display <- df_full %>% mutate(across(where(is.numeric), function(x) round(x,4))) %>%
       mutate(Protein.Name_Link = ifelse(!is.na(Accession) & str_detect(Accession, "^[A-Z0-9]{6,}$"),
                                        paste0("<a href='https://www.uniprot.org/uniprotkb/", Accession,
@@ -3825,7 +4219,12 @@ server <- function(input, output, session) {
     req(input$de_table_rows_selected, length(input$de_table_rows_selected) > 0)
     df_full <- volcano_data()
 
-    # Table always shows full data (not filtered), so row indices map directly
+    # If table is filtered (volcano/AI selection active), row indices refer to filtered data
+    current_selection <- isolate(values$plot_selected_proteins)
+    if (!is.null(current_selection) && length(current_selection) > 0) {
+      df_full <- df_full %>% filter(Protein.Group %in% current_selection)
+    }
+
     selected_proteins <- df_full$Protein.Group[input$de_table_rows_selected]
 
     if (length(selected_proteins) > 0) {
@@ -4460,6 +4859,15 @@ server <- function(input, output, session) {
         paste("Showing top 6 of", n_distinct(xic$Precursor.Id),
               "precursors. Use the selector to view others."),
         type = "message", duration = 4)
+    }
+
+    # Guard: ensure data exists and has faceting variables before plotting
+    if (nrow(xic_plot) == 0 || n_distinct(xic_plot$Fragment.Label) == 0) {
+      p <- ggplot() +
+        annotate("text", x = 0.5, y = 0.5, label = "No chromatogram data available for this selection",
+                 size = 5, color = "gray60") +
+        theme_void()
+      return(ggplotly(p) %>% config(displayModeBar = FALSE))
     }
 
     # Sample label for faceting

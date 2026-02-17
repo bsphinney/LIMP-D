@@ -14,25 +14,29 @@
 
 ---
 
-## ✨ What's New in v2.1
+## ✨ What's New in v2.2
 
-**XIC Chromatogram Viewer** (February 2026 — Local/HPC only):
-- 📈 **Fragment-level XIC inspection** - View chromatograms for any differentially expressed protein
-- 📊 **MS2 Intensity Alignment** - Spectronaut-style stacked bar chart with automatic inconsistency detection
-- 🔄 **Dual format support** - Auto-detects DIA-NN 1.x (wide) and 2.x (long) XIC formats
-- 📊 **Split-axis MS1/MS2** - MS1 precursor on top, MS2 fragments below with independent y-axes
-- ⚡ **Ion mobility support** - Mobilogram visualization for timsTOF/PASEF data with clear mode indicator
-- 🔍 **Auto-detection** - XIC directory auto-populates and auto-loads when data is uploaded
+**Contextual Help System** (February 2026):
+- ❓ **15 info modal buttons** across every major tab — click `?` for in-context guidance on any plot or table
+- Covers: QC Plots, DE Dashboard, Data Overview, Consistent DE, QC Trends, GSEA, Methodology, Data Chat
+- Each modal explains what you're seeing, what "good" and "bad" look like, and what to do next
 
-**Major UI/UX Enhancements**:
-- 🎯 **Four-Way Comparison Selector Sync** - Signal Distribution, Expression Grid, P-value Distribution, and DE Dashboard selectors now sync automatically
-- 📊 **Enhanced Dataset Summary** - DE protein counts per comparison with explicit directional arrows (↑ higher in X, ↓ higher in Y)
-- 🔬 **P-value Distribution Diagnostic** - Automated pattern detection with color-coded guidance (healthy, inflation, low power, model issues)
-- 📈 **CV Distribution Histogram** - Visual distribution of protein variability per experimental group
-- 🤖 **AI Summary Relocated** - Moved from modal popup to dedicated Data Overview sub-tab with inline display
-- 🌋 **Volcano Plot Annotations** - FDR and logFC thresholds clearly labeled with significance criteria legend box
-- 🎨 **Signal Distribution Enhancement** - Always shows DE coloring automatically with dedicated comparison selector
-- 🎨 **Responsive Plot Heights** - All plots use viewport-relative units for optimal viewing on any screen size
+**Improved DE Dashboard**:
+- 🌋 **Volcano → Table filtering** - Selecting proteins in the volcano plot now filters the results table
+- 🗺️ **MDS Plot legend** - Color-coded group legend now visible inside the plot
+- 📊 **Heatmap expanded by default** - No more clicking to open the accordion
+
+**Cleaner Layouts**:
+- Normalization Diagnostic and P-value Distribution help content moved to modals (no more layout interference)
+- P-value guidance banner moved below the plot so the comparison dropdown isn't crowded
+
+See [CHANGELOG.md](CHANGELOG.md) for full release history.
+
+### Previous: v2.1 Highlights
+- 📈 **XIC Chromatogram Viewer** with MS2 Intensity Alignment and ion mobility support (Local/HPC)
+- 🎯 **Four-Way Comparison Selector Sync** across all tabs
+- 🔬 **P-value Distribution Diagnostic** with automated pattern detection
+- 🌋 **Volcano Plot Annotations** with FDR/logFC threshold legend
 
 See [CHANGELOG.md](CHANGELOG.md) for full release history.
 

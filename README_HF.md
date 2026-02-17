@@ -22,22 +22,22 @@ tags:
 
 An interactive R Shiny application for differential expression analysis of DIA-NN proteomics data. Built on **Limpa** and **Limma** for robust statistics, with **Google Gemini AI** integration.
 
-## ✨ What's New in v2.1
+## ✨ What's New in v2.2
 
-**XIC Chromatogram Viewer** (not available here — [download for local/HPC use](https://github.com/bsphinney/DE-LIMP)):
-- 📈 Fragment-level XIC inspection with split-axis MS1/MS2 view
-- 📊 MS2 Intensity Alignment with automatic inconsistency detection
-- ⚡ Ion mobility support for timsTOF/PASEF data
-- 🔄 DIA-NN 1.x and 2.x format support
+**Contextual Help System** (February 2026):
+- ❓ **15 info modal buttons** — click `?` on any tab for in-context guidance
+- Covers QC Plots, DE Dashboard, Data Overview, Consistent DE, QC Trends, GSEA, Methodology, Data Chat
 
-**Major UI/UX Enhancements** (February 2026):
-- 🎯 **Four-Way Selector Sync** - All comparison selectors automatically synchronized
-- 📊 **Enhanced Dataset Summary** - DE counts with directional arrows (↑↓)
-- 🔬 **P-value Diagnostics** - Automated pattern detection with color-coded guidance
-- 📈 **CV Distribution** - Visual protein variability per group
-- 🤖 **AI Summary Tab** - Dedicated sub-tab with inline display
-- 🌋 **Volcano Annotations** - FDR/logFC thresholds with legend box
-- 🎨 **Responsive Design** - Viewport-relative plot heights for all screens
+**Improved DE Dashboard**:
+- 🌋 Volcano → Table filtering (select proteins in volcano to filter the table)
+- 🗺️ MDS Plot legend now visible; heatmap expanded by default
+- Cleaner layouts: help content in modals, not cluttering plots
+
+**Previous highlights** (v2.1):
+- 📈 XIC Chromatogram Viewer with MS2 Intensity Alignment ([local/HPC only](https://github.com/bsphinney/DE-LIMP))
+- 🎯 Four-Way Selector Sync across all comparison dropdowns
+- 🔬 P-value Distribution Diagnostic with automated pattern detection
+- 🌋 Volcano Plot Annotations with FDR/logFC threshold legend
 
 ## 🚀 Features
 
