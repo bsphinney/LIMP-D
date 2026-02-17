@@ -16,12 +16,13 @@
 
 ## ✨ What's New in v2.1
 
-**XIC Chromatogram Viewer** (February 2026):
+**XIC Chromatogram Viewer** (February 2026 — Local/HPC only):
 - 📈 **Fragment-level XIC inspection** - View chromatograms for any differentially expressed protein
+- 📊 **MS2 Intensity Alignment** - Spectronaut-style stacked bar chart with automatic inconsistency detection
 - 🔄 **Dual format support** - Auto-detects DIA-NN 1.x (wide) and 2.x (long) XIC formats
 - 📊 **Split-axis MS1/MS2** - MS1 precursor on top, MS2 fragments below with independent y-axes
 - ⚡ **Ion mobility support** - Mobilogram visualization for timsTOF/PASEF data with clear mode indicator
-- 🔍 **Auto-detection** - XIC directory path auto-populates based on report filename
+- 🔍 **Auto-detection** - XIC directory auto-populates and auto-loads when data is uploaded
 
 **Major UI/UX Enhancements**:
 - 🎯 **Four-Way Comparison Selector Sync** - Signal Distribution, Expression Grid, P-value Distribution, and DE Dashboard selectors now sync automatically
@@ -174,6 +175,7 @@ httr2, curl
 - **Data Overview** - Signal distributions and QC summaries
 - **QC Trends** - Temporal trends with group averages
 - **DE Dashboard** - Volcano plots and interactive tables (current comparison shown prominently)
+- **XIC Viewer** - Click "📈 XICs" on any DE protein to inspect fragment chromatograms (local/HPC only)
 - **Consistent DE** - High-reproducibility proteins
 - **GSEA** - Gene Ontology enrichment
 - **Data Chat** - AI-powered exploration
