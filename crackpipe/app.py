@@ -325,16 +325,15 @@ def page_chimeric():
     y_ions = 1400 - b_ions + 18.015 + 1.0078
     good_mz = np.concatenate([b_ions, y_ions])
     good_int = rng.uniform(30, 100, len(good_mz))
+    good_labels = [f"b{i+1}" for i in range(len(b_ions))] + [f"y{i+1}" for i in range(len(y_ions))]
+    good_colors = ["#0284c7"] * len(good_mz)
     # noise
     noise_mz = rng.uniform(100, 1400, 15)
     noise_int = rng.uniform(2, 12, 15)
     good_mz = np.concatenate([good_mz, noise_mz])
     good_int = np.concatenate([good_int, noise_int])
-    labels = (
-        [f"b{i+1}" for i in range(len(b_ions))]
-        + [f"y{i+1}" for i in range(len(y_ions))]
-        + [""] * len(noise_mz)
-    )
+    good_labels += [""] * len(noise_mz)
+    good_colors += ["#94a3b8"] * len(noise_mz)
 
     # --- Bad spectrum (chimeric — two peptides merged) ---
     residues2 = rng.uniform(57, 186, 10)
@@ -348,15 +347,36 @@ def page_chimeric():
          rng.uniform(20, 80, len(y2))]
     )
 
+    # Helper: build stem plot traces (vertical lines from baseline to peak)
+    def add_stems(fig, mzs, intensities, color, name=None):
+        stem_x, stem_y = [], []
+        for m, i in zip(mzs, intensities):
+            stem_x.extend([m, m, None])
+            stem_y.extend([0, i, None])
+        fig.add_trace(go.Scatter(
+            x=stem_x, y=stem_y, mode="lines",
+            line=dict(color=color, width=1.5),
+            showlegend=False, name=name or "",
+            hoverinfo="skip",
+        ))
+
     col1, col2 = st.columns(2)
     with col1:
         st.markdown('<p class="plot-col-title">Good Data ✅</p>', unsafe_allow_html=True)
         fig = go.Figure()
-        for mz, inten, lab in zip(good_mz, good_int, labels):
-            color = "#0284c7" if lab else "#94a3b8"
-            fig.add_trace(go.Bar(x=[mz], y=[inten], width=1.5, marker_color=color,
-                                 text=lab, textposition="outside", textfont=dict(size=8),
-                                 showlegend=False, hoverinfo="x+y"))
+        # Matched ions (b/y) as blue stems
+        matched = [(m, i) for m, i, lab in zip(good_mz, good_int, good_labels) if lab]
+        if matched:
+            add_stems(fig, [p[0] for p in matched], [p[1] for p in matched], "#0284c7")
+        # Noise as gray stems
+        noise = [(m, i) for m, i, lab in zip(good_mz, good_int, good_labels) if not lab]
+        if noise:
+            add_stems(fig, [p[0] for p in noise], [p[1] for p in noise], "#94a3b8")
+        # Ion labels
+        for m, i, lab in zip(good_mz, good_int, good_labels):
+            if lab:
+                fig.add_annotation(x=m, y=i, text=lab, showarrow=False,
+                                   yshift=8, font=dict(size=8, color="#0284c7"))
         styled_fig(fig, title="Clean MS2 — single peptide",
                    xaxis_title="m/z", yaxis_title="Intensity", height=420)
         st.plotly_chart(fig, use_container_width=True)
@@ -364,8 +384,11 @@ def page_chimeric():
     with col2:
         st.markdown('<p class="plot-col-title">Bad Data ❌</p>', unsafe_allow_html=True)
         fig2 = go.Figure()
-        fig2.add_trace(go.Bar(x=bad_mz, y=bad_int, width=1.5, marker_color="#ef4444",
-                              showlegend=False))
+        # Peptide 1 ions (attenuated original) in orange
+        n_pep1 = len(good_mz)
+        add_stems(fig2, bad_mz[:n_pep1], bad_int[:n_pep1], "#ef4444")
+        # Peptide 2 ions (interfering) in darker red
+        add_stems(fig2, bad_mz[n_pep1:], bad_int[n_pep1:], "#b91c1c")
         styled_fig(fig2, title="Chimeric MS2 — two peptides mixed",
                    xaxis_title="m/z", yaxis_title="Intensity", height=420)
         st.plotly_chart(fig2, use_container_width=True)
