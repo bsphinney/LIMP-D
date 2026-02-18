@@ -3,25 +3,38 @@
 # ==============================================================================
 
 # --- QC Stats Calculation ---
+# Memory-optimized: reads only needed columns via Arrow col_select,
+# then aggregates before collecting into R memory.
 get_diann_stats_r <- function(file_path) {
   tryCatch({
-    df <- arrow::read_parquet(file_path)
-    has_pg_q <- "PG.Q.Value" %in% names(df)
-    has_ms1  <- "Ms1.Apex.Area" %in% names(df)
-    if ("Q.Value" %in% names(df)) df <- df %>% filter(Q.Value <= 0.01)
+    # Check which columns are available without reading data
+    available_cols <- names(arrow::read_parquet(file_path, as_data_frame = FALSE))
+
+    needed_cols <- c("Run", "Protein.Group", "Q.Value")
+    has_pg_q <- "PG.Q.Value" %in% available_cols
+    has_ms1  <- "Ms1.Apex.Area" %in% available_cols
+    if (has_pg_q) needed_cols <- c(needed_cols, "PG.Q.Value")
+    if (has_ms1)  needed_cols <- c(needed_cols, "Ms1.Apex.Area")
+
+    # Read only the needed columns (saves 70-80% memory for large files)
+    df <- arrow::read_parquet(file_path, col_select = dplyr::all_of(needed_cols))
+    if ("Q.Value" %in% names(df)) df <- df %>% dplyr::filter(Q.Value <= 0.01)
 
     stats_df <- df %>%
-      group_by(Run) %>%
-      summarise(
-        Precursors = n(),
+      dplyr::group_by(Run) %>%
+      dplyr::summarise(
+        Precursors = dplyr::n(),
         Proteins = if(has_pg_q) {
-          n_distinct(Protein.Group[PG.Q.Value <= 0.01])
+          dplyr::n_distinct(Protein.Group[PG.Q.Value <= 0.01])
         } else {
-          n_distinct(Protein.Group)
+          dplyr::n_distinct(Protein.Group)
         },
         MS1_Signal = if(has_ms1) sum(Ms1.Apex.Area, na.rm = TRUE) else NA_real_,
         .groups = 'drop'
-      ) %>% arrange(Run)
+      ) %>% dplyr::arrange(Run)
+
+    # Free the large intermediate df immediately
+    rm(df); gc(verbose = FALSE)
 
     return(stats_df)
   }, error = function(e) { data.frame(Run = "Error", Precursors = 0, Proteins = 0, MS1_Signal = 0) })

@@ -99,11 +99,19 @@ server_data <- function(input, output, session, values, add_to_log, is_hf_space)
   observeEvent(input$report_file, {
     req(input$report_file)
     withProgress(message = "Loading...", {
-      incProgress(0.2, detail = "Calculating Trends...")
+      file_mb <- round(file.size(input$report_file$datapath) / 1e6, 1)
+      message(sprintf("[DE-LIMP] Loading report: %s (%.1f MB)", input$report_file$name, file_mb))
+
+      incProgress(0.15, detail = sprintf("Calculating QC Trends (%.0f MB file)...", file_mb))
       values$qc_stats <- get_diann_stats_r(input$report_file$datapath)
-      incProgress(0.5, detail = "Reading Matrix...")
+      gc(verbose = FALSE)  # free QC stats intermediate memory
+
+      incProgress(0.4, detail = "Reading expression matrix (this may take a while for large files)...")
+      message(sprintf("[DE-LIMP] Memory before readDIANN: %.0f MB used", sum(gc()[,2])))
       tryCatch({
         values$raw_data <- limpa::readDIANN(input$report_file$datapath, format="parquet", q.cutoffs=input$q_cutoff)
+        gc(verbose = FALSE)  # free readDIANN intermediates
+        message(sprintf("[DE-LIMP] Memory after readDIANN: %.0f MB used", sum(gc()[,2])))
         fnames <- sort(colnames(values$raw_data$E))
         values$metadata <- data.frame(
           ID = 1:length(fnames),
@@ -133,14 +141,21 @@ server_data <- function(input, output, session, values, add_to_log, is_hf_space)
           } else { "unknown" }
         }, error = function(e) "unknown")
 
-        # Store report path for XIC viewer precursor mapping (copy to session dir)
-        session_report <- file.path(tempdir(), "de_limp_report.parquet")
-        file.copy(input$report_file$datapath, session_report, overwrite = TRUE)
-        values$uploaded_report_path <- session_report
+        # Store report path for XIC viewer precursor mapping
+        # For large files (>1 GB), avoid copying — Shiny keeps the upload alive for the session.
+        # For smaller files, copy to a stable path (upload tempfiles can have unpredictable names).
+        if (file_mb > 1000) {
+          values$uploaded_report_path <- input$report_file$datapath
+          message("[DE-LIMP] Large file — using upload path directly (skipping copy)")
+        } else {
+          session_report <- file.path(tempdir(), "de_limp_report.parquet")
+          file.copy(input$report_file$datapath, session_report, overwrite = TRUE)
+          values$uploaded_report_path <- session_report
+        }
         values$original_report_name <- input$report_file$name
 
         # Auto-detect phospho data
-        values$phospho_detected <- detect_phospho(session_report)
+        values$phospho_detected <- detect_phospho(values$uploaded_report_path)
 
         # Auto-detect XIC directory next to the uploaded report (local/HPC only)
         if (!is_hf_space) {
@@ -413,11 +428,21 @@ server_data <- function(input, output, session, values, add_to_log, is_hf_space)
     withProgress(message='Running Pipeline...', {
       tryCatch({
         dat <- values$raw_data
+        message(sprintf("[DE-LIMP] Pipeline start — %d samples, memory: %.0f MB",
+                        ncol(dat$E), sum(gc(verbose = FALSE)[,2])))
+
+        incProgress(0.2, detail = "Normalizing (DPC-CN)...")
         dpcfit <- limpa::dpcCN(dat)
         values$dpc_fit <- dpcfit
+        gc(verbose = FALSE)
 
+        incProgress(0.5, detail = "Protein quantification (maxLFQ)...")
         values$y_protein <- tryCatch({
-          limpa::dpcQuant(dat, "Protein.Group", dpc=dpcfit)
+          result <- limpa::dpcQuant(dat, "Protein.Group", dpc=dpcfit)
+          gc(verbose = FALSE)
+          message(sprintf("[DE-LIMP] Quantification done — %d proteins, memory: %.0f MB",
+                          nrow(result$E), sum(gc(verbose = FALSE)[,2])))
+          result
         }, error = function(e) {
           showNotification(paste("Protein quantification failed:", e$message), type = "error", duration = NULL)
           return(NULL)
