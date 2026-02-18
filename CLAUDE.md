@@ -22,11 +22,21 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 
 | File | Purpose |
 |------|---------|
-| `app.R` | Main Shiny app (~4900 lines) - used by HF Spaces. **Must be identical to DE-LIMP.R** |
-| `DE-LIMP.R` | Identical copy of app.R - for GitHub releases/local users |
+| `app.R` | Thin orchestrator (~230 lines) — package loading, reactive values init, calls R/ modules |
+| `R/ui.R` | `build_ui(is_hf_space)` — full UI definition (~700 lines) |
+| `R/server_data.R` | Data upload, example load, group assignment, pipeline execution (~576 lines) |
+| `R/server_de.R` | Volcano, DE table, heatmap, consistent DE, selection sync (~498 lines) |
+| `R/server_qc.R` | QC trends, diagnostic plots, p-value distribution (~828 lines) |
+| `R/server_viz.R` | Expression grid, signal distribution, AI summary (~381 lines) |
+| `R/server_gsea.R` | GSEA analysis, dot/emap/ridge plots, results table (~144 lines) |
+| `R/server_ai.R` | Data Chat tab, Gemini integration (~181 lines) |
+| `R/server_xic.R` | XIC viewer, mobilogram, alignment (~861 lines) |
+| `R/server_session.R` | Info modals, save/load session, reproducibility, methodology (~533 lines) |
+| `R/helpers.R` | `get_diann_stats_r()`, `cal_z_score()`, `detect_organism_db()` |
+| `R/helpers_ai.R` | `list_google_models()`, `upload_csv_to_gemini()`, `ask_gemini_*()` |
+| `R/helpers_xic.R` | `detect_xic_format()`, `load_xic_for_protein()`, `reshape_xic_for_plotting()` |
+| `DE-LIMP.R` | Legacy single-file copy (pre-modularization, for backwards compat) |
 | `Dockerfile` | Docker container for HF Spaces and HPC deployment |
-| `UI_LAYOUT_SPEC.md` | Spec for v2.1 responsive UI layout refactoring |
-| `NORMALIZATION_DIAGNOSTIC_SPEC.md` | Spec for normalization diagnostic plot feature |
 | `HPC_DEPLOYMENT.md` | Guide for HPC cluster deployment with Apptainer/Singularity |
 | `USER_GUIDE.md` | End-user documentation |
 | `README_GITHUB.md` | **SOURCE** for GitHub README (edit this!) |
@@ -38,14 +48,29 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 
 ## App Architecture
 
-### Structure (app.R, ~4900 lines)
+### Structure (modular, ~5,200 lines total)
 ```
-Lines 1-110:     Auto-installation & setup (R/Bioc version checks, package install)
-Lines 111-170:   Server configuration (max upload size, HF detection, Gemini API)
-Lines 170-330:   Helper functions (QC stats, AI chat, organism detection, XIC helpers)
-Lines 331-900:   UI definition (page_sidebar with 9 main tabs, 15 info modal buttons)
-Lines 900-4900:  Server logic (~80+ reactive elements, XIC viewer, info modal observers)
-Line ~4900:      shinyApp(ui, server)
+app.R (231 lines):     Package loading, auto-install, reactive values, module calls
+R/ui.R:                build_ui() — CSS/JS, sidebar, all 9 tab nav_panels
+R/server_*.R (8 files): Server modules, each receives (input, output, session, values, ...)
+R/helpers*.R (3 files): Pure utility functions (no Shiny reactivity)
+```
+
+### Module calling pattern (app.R server function)
+```r
+server <- function(input, output, session) {
+  values <- reactiveValues(...)
+  add_to_log <- function(action_name, code_lines) { ... }
+
+  server_data(input, output, session, values, add_to_log, is_hf_space)
+  server_de(input, output, session, values, add_to_log)
+  server_qc(input, output, session, values)
+  server_viz(input, output, session, values, add_to_log, is_hf_space)
+  server_gsea(input, output, session, values, add_to_log)
+  server_ai(input, output, session, values)
+  server_xic(input, output, session, values, is_hf_space)
+  server_session(input, output, session, values, add_to_log)
+}
 ```
 
 ### Main Tab Structure
@@ -107,25 +132,27 @@ Line ~4900:      shinyApp(ui, server)
 
 ### Running Locally
 ```r
-# In VS Code R terminal (recommended):
-shiny::runApp('/Users/brettphinney/Documents/claude/DE-LIMP.r', port=3838, launch.browser=TRUE)
+# In VS Code R terminal (recommended) — directory-based:
+shiny::runApp('/Users/brettphinney/Documents/claude/', port=3838, launch.browser=TRUE)
 
 # From command line:
-Rscript -e "shiny::runApp('/Users/brettphinney/Documents/claude/DE-LIMP.r', port=3838)" &
+Rscript -e "shiny::runApp('/Users/brettphinney/Documents/claude/', port=3838)" &
 ```
 
 - **DO NOT** use `source()` - it doesn't work properly in VS Code
+- `app.R` explicitly sources all `R/*.R` files, so it works with both `runApp('.')` and `runApp('app.R')`
 - Shiny apps don't hot-reload - must restart after every code change
-- Stop: `pkill -f "DE-LIMP.r"` or `Ctrl+C`
+- **Upload limit**: 5 GB (`options(shiny.maxRequestSize)` in app.R line 145)
+- Stop: `pkill -f "shiny::runApp"` or `Ctrl+C`
 - Check if running: `lsof -i :3838`
 
-### Keeping app.R and DE-LIMP.R in Sync
-These files must be identical. After editing one: `cp DE-LIMP.R app.R` (or vice versa).
+### DE-LIMP.R (Legacy)
+`DE-LIMP.R` is the old single-file monolith kept for backwards compatibility. The active app is now directory-based (`app.R` + `R/` directory). Do NOT edit `DE-LIMP.R` — it will be removed in a future release.
 
 ## Deployment
 
 ### Three Platforms
-1. **GitHub** (`origin` remote) - Source code, releases, download DE-LIMP.R
+1. **GitHub** (`origin` remote) - Source code, releases
 2. **Hugging Face Spaces** (`hf` remote) - Web app via Docker (app.R)
 3. **HPC Clusters** - Apptainer/Singularity containers (see HPC_DEPLOYMENT.md)
 
@@ -138,9 +165,9 @@ Pushing to `origin/main` automatically syncs to HF within 1-2 minutes.
 
 ```bash
 # Standard workflow for code changes:
-git add DE-LIMP.R app.R  # be specific with files
+git add app.R R/           # add orchestrator + modules
 git commit -m "Description"
-git push origin main      # HF syncs automatically
+git push origin main       # HF syncs automatically
 ```
 
 ### README Management (CRITICAL)
@@ -163,10 +190,10 @@ rm README_GITHUB_BACKUP.md
 
 ### Adding New R Packages
 When adding features that require new packages:
-1. Add `library()` call to app.R/DE-LIMP.R
+1. Add `library()` call to app.R
 2. Update Dockerfile to install the package (CRAN in Section 2, Bioconductor in Section 3)
 3. Consider system dependencies: graphics packages need `libcairo2-dev`, XML/web need `libxml2-dev`
-4. Commit app.R, DE-LIMP.R, and Dockerfile together
+4. Commit app.R, R/ modules, and Dockerfile together
 
 ### Minimize HF Builds
 HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Always test locally first, batch changes, and push only when fully tested.
@@ -232,9 +259,10 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 
 ## Version History
 
-Current version: **v2.2.0** (2026-02-17). See [CHANGELOG.md](CHANGELOG.md) for detailed release history.
+Current version: **v2.3.0** (2026-02-17). See [CHANGELOG.md](CHANGELOG.md) for detailed release history.
 
 ### Key Architecture Decisions (for context)
+- **Modularization** (v2.3): Split 5,139-line monolith into `app.R` orchestrator + 12 `R/` module files. Each server module receives `(input, output, session, values, ...)`. `app.R` explicitly sources `R/` for compatibility with both `runApp('.')` and `runApp('app.R')`.
 - **Volcano → Table filtering** (v2.2): `output$de_table` filters by `values$plot_selected_proteins`. Row selection observer uses `isolate()` to index into filtered data. `req(length > 0)` prevents reactive loop when selection resets to NULL.
 - **Contextual Help** (v2.2): 15 info modal `?` buttons across all major tabs. See "Info modal pattern" in Key Patterns above.
 - **XIC Viewer** (v2.1): Fragment-level chromatogram inspection with 3 display modes (facet by sample, facet by fragment, intensity alignment). Supports DIA-NN v1/v2 formats and ion mobility. Local/HPC only (hidden on HF).

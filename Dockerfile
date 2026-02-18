@@ -35,8 +35,8 @@ RUN R -e "BiocManager::install(c('ggtree', 'ggtangle'), ask=FALSE, update=FALSE)
 RUN R -e "BiocManager::install(c('clusterProfiler', 'enrichplot'), ask=FALSE, update=FALSE)"
 
 # 4. Copy the App Files into the image
-# Copy app.R (Hugging Face standard naming)
 COPY app.R /srv/shiny-server/app.R
+COPY R/ /srv/shiny-server/R/
 
 # (Optional: If you have your logo file locally, uncomment the next line)
 # COPY funny_scientist.png /srv/shiny-server/funny_scientist.png
@@ -45,4 +45,4 @@ COPY app.R /srv/shiny-server/app.R
 EXPOSE 3838
 
 # 6. Run the App
-CMD ["R", "-e", "shiny::runApp('/srv/shiny-server/app.R', host = '0.0.0.0', port = 7860)"]
+CMD ["R", "-e", "shiny::runApp('/srv/shiny-server/', host = '0.0.0.0', port = 7860)"]
