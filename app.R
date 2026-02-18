@@ -230,7 +230,8 @@ server <- function(input, output, session) {
     ksea_results = NULL,
     ksea_last_contrast = NULL,
     phospho_fasta_sequences = NULL,
-    phospho_corrected_active = FALSE
+    phospho_corrected_active = FALSE,
+    phospho_annotations = NULL
   )
 
   # --- Shared helper: append to reproducibility log ---

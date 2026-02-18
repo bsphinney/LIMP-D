@@ -394,6 +394,29 @@ server_phospho <- function(input, output, session, values, add_to_log) {
           hr(),
           plotOutput("phospho_motif_up", height = "220px"),
           plotOutput("phospho_motif_down", height = "220px")
+        ),
+
+        nav_panel("Site Annotation",
+          tags$div(
+            style = "display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;",
+            actionButton("run_site_annotation", "Query UniProt for Known Sites",
+                         class = "btn-info", icon = icon("database")),
+            tags$span(class = "text-muted small",
+              "Queries UniProt & PhosphoSitePlus to annotate each site as Known or Novel."
+            )
+          ),
+          uiOutput("site_annotation_summary"),
+          tags$p(class = "text-muted small",
+            "Known sites have been experimentally confirmed in UniProt (curated literature evidence) ",
+            "or appear as kinase substrates in PhosphoSitePlus. Novel sites are not yet in these databases. ",
+            "Note: matching uses protein-relative positions (best with Path A / DIA-NN site matrix)."
+          ),
+          hr(),
+          tags$div(style = "text-align: right; margin-bottom: 10px;",
+            downloadButton("download_annotation_table", "Export CSV",
+                           class = "btn-success btn-sm")
+          ),
+          DT::DTOutput("site_annotation_table")
         )
       )
     )
@@ -969,5 +992,170 @@ server_phospho <- function(input, output, session, values, add_to_log) {
       values$phospho_corrected_active <- FALSE
     }
   })
+
+  # ============================================================================
+  #  Site Annotation — Known vs Novel phosphosites
+  # ============================================================================
+  observeEvent(input$run_site_annotation, {
+    req(values$phospho_site_info)
+
+    site_info <- values$phospho_site_info
+
+    # Extract unique accessions (first accession from Protein.Group)
+    accessions <- unique(vapply(
+      strsplit(site_info$Protein.Group, "[;]"),
+      function(x) trimws(x[1]),
+      character(1)
+    ))
+    accessions <- accessions[!is.na(accessions) & nzchar(accessions)]
+
+    withProgress(message = "Annotating phosphosites...", {
+      incProgress(0.05, detail = sprintf("Querying UniProt for %d proteins...", length(accessions)))
+
+      # --- Query UniProt ---
+      uniprot_sites <- tryCatch(
+        query_uniprot_phosphosites(accessions, progress_fn = function(frac) {
+          incProgress(frac * 0.7,
+            detail = sprintf("UniProt: %d / %d proteins...",
+                             round(frac * length(accessions)), length(accessions)))
+        }),
+        error = function(e) {
+          showNotification(paste("UniProt query error:", e$message),
+                           type = "warning", duration = 8)
+          data.frame(Accession = character(0), Position = integer(0),
+                     Residue = character(0), Description = character(0),
+                     Evidence.Code = character(0), Evidence.Source = character(0),
+                     Evidence.ID = character(0), stringsAsFactors = FALSE)
+        }
+      )
+
+      incProgress(0.75, detail = "Checking PhosphoSitePlus...")
+
+      # --- Get PhosphoSitePlus sites ---
+      psp_sites <- get_psp_known_sites()
+
+      incProgress(0.85, detail = "Building annotation table...")
+
+      # --- Get DE results if available ---
+      de_results <- NULL
+      if (!is.null(values$phospho_fit) && !is.null(input$phospho_contrast_selector)) {
+        de_results <- tryCatch(
+          limma::topTable(values$phospho_fit,
+                          coef = input$phospho_contrast_selector,
+                          number = Inf),
+          error = function(e) NULL
+        )
+      }
+
+      # --- Build annotated table ---
+      ann_table <- build_site_annotation_table(
+        site_info, de_results, uniprot_sites, psp_sites
+      )
+
+      values$phospho_annotations <- ann_table
+
+      incProgress(1.0, detail = "Complete!")
+
+      n_known <- sum(ann_table$Status == "Known")
+      n_total <- nrow(ann_table)
+      showNotification(
+        sprintf("\u2713 Annotation complete: %d / %d sites are known (%.0f%%).",
+                n_known, n_total, 100 * n_known / max(n_total, 1)),
+        type = "message", duration = 8
+      )
+
+      add_to_log("Phosphosite Annotation", c(
+        sprintf("# Queried %d unique accessions against UniProt REST API", length(accessions)),
+        sprintf("# UniProt: %d known phosphosites found", nrow(uniprot_sites)),
+        sprintf("# PhosphoSitePlus (KSEAapp): %d substrate sites in database", nrow(psp_sites)),
+        sprintf("# Result: %d known / %d total sites", n_known, n_total)
+      ))
+    })
+  })
+
+  # Summary banner
+  output$site_annotation_summary <- renderUI({
+    req(values$phospho_annotations)
+    ann <- values$phospho_annotations
+
+    n_total <- nrow(ann)
+    n_known <- sum(ann$Status == "Known")
+    n_novel <- n_total - n_known
+    pct_known <- round(100 * n_known / max(n_total, 1))
+
+    tags$div(
+      class = "alert alert-success py-2 px-3 mb-3",
+      style = "font-size: 0.9em;",
+      tags$div(
+        style = "display: flex; gap: 20px; align-items: center; flex-wrap: wrap;",
+        tags$span(
+          icon("check-circle"),
+          sprintf(" %d of %d sites annotated (%d%% known)", n_known, n_total, pct_known)
+        ),
+        tags$span(
+          style = "color: #2e7d32; font-weight: bold;",
+          sprintf("\u2705 Known: %d", n_known)
+        ),
+        tags$span(
+          style = "color: #e65100; font-weight: bold;",
+          sprintf("\u2728 Novel: %d", n_novel)
+        )
+      )
+    )
+  })
+
+  # Annotation table
+  output$site_annotation_table <- DT::renderDT({
+    req(values$phospho_annotations)
+    ann <- values$phospho_annotations
+
+    # Round numeric columns
+    if ("logFC" %in% names(ann))     ann$logFC     <- round(ann$logFC, 3)
+    if ("adj.P.Val" %in% names(ann)) ann$adj.P.Val <- signif(ann$adj.P.Val, 3)
+
+    DT::datatable(
+      ann,
+      rownames = FALSE,
+      escape = FALSE,  # Allow HTML in Evidence column
+      filter = "top",
+      selection = "multiple",
+      options = list(
+        pageLength = 25,
+        scrollX = TRUE,
+        order = list(list(which(names(ann) == "Status") - 1, "asc")),
+        columnDefs = list(
+          list(
+            targets = which(names(ann) == "Status") - 1,
+            render = DT::JS(
+              "function(data, type, row) {",
+              "  if (type === 'display') {",
+              "    if (data === 'Known') {",
+              "      return '<span style=\"background:#c8e6c9; color:#2e7d32; padding:2px 8px; border-radius:4px; font-weight:600;\">' + data + '</span>';",
+              "    } else {",
+              "      return '<span style=\"background:#ffe0b2; color:#e65100; padding:2px 8px; border-radius:4px; font-weight:600;\">' + data + '</span>';",
+              "    }",
+              "  }",
+              "  return data;",
+              "}"
+            )
+          )
+        )
+      )
+    )
+  })
+
+  # Download annotation table
+  output$download_annotation_table <- downloadHandler(
+    filename = function() {
+      paste0("phosphosite_annotations_", format(Sys.time(), "%Y%m%d"), ".csv")
+    },
+    content = function(file) {
+      req(values$phospho_annotations)
+      # Strip HTML from Evidence column for CSV export
+      ann <- values$phospho_annotations
+      ann$Evidence <- gsub("<[^>]+>", "", ann$Evidence)
+      write.csv(ann, file, row.names = FALSE)
+    }
+  )
 
 }

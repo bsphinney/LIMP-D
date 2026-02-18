@@ -376,3 +376,253 @@ phospho_ai_context <- function(phospho_fit, contrast, ksea_results = NULL) {
 
   context
 }
+
+# ==============================================================================
+#  Site Annotation — Query UniProt & PhosphoSitePlus for known phosphosites
+# ==============================================================================
+
+#' Query UniProt REST API for known phosphorylation sites
+#'
+#' For each accession, fetches the protein entry and parses "Modified residue"
+#' features that contain "Phospho" (Phosphoserine/threonine/tyrosine).
+#' Returns position, residue, description, and PubMed evidence where available.
+#'
+#' @param accessions Character vector of UniProt accessions
+#' @param progress_fn Optional function(fraction) for Shiny progress updates
+#' @return data.frame with columns: Accession, Position, Residue, Description,
+#'   Evidence.Code, Evidence.Source, Evidence.ID
+query_uniprot_phosphosites <- function(accessions, progress_fn = NULL) {
+  accessions <- unique(accessions[!is.na(accessions) & nzchar(accessions)])
+
+  empty_df <- data.frame(
+    Accession       = character(0),
+    Position        = integer(0),
+    Residue         = character(0),
+    Description     = character(0),
+    Evidence.Code   = character(0),
+    Evidence.Source = character(0),
+    Evidence.ID     = character(0),
+    stringsAsFactors = FALSE
+  )
+
+  if (length(accessions) == 0) return(empty_df)
+
+  all_sites <- vector("list", length(accessions))
+
+  for (i in seq_along(accessions)) {
+    acc <- accessions[i]
+    if (!is.null(progress_fn)) progress_fn(i / length(accessions))
+
+    tryCatch({
+      resp <- httr2::request(
+        paste0("https://rest.uniprot.org/uniprotkb/", acc)
+      ) |>
+        httr2::req_headers("Accept" = "application/json") |>
+        httr2::req_timeout(15) |>
+        httr2::req_perform()
+
+      json <- httr2::resp_body_json(resp)
+
+      feats <- json$features
+      if (is.null(feats) || length(feats) == 0) next
+
+      batch <- list()
+      for (feat in feats) {
+        if (is.null(feat$type) || feat$type != "Modified residue") next
+        desc <- feat$description %||% ""
+        if (!grepl("Phospho", desc, ignore.case = TRUE)) next
+
+        pos <- feat$location$start$value
+        if (is.null(pos)) next
+
+        residue <- if (grepl("Phosphoserine", desc))    "S"
+                   else if (grepl("Phosphothreonine", desc)) "T"
+                   else if (grepl("Phosphotyrosine", desc))  "Y"
+                   else "?"
+
+        # First evidence entry (if any)
+        ev_code   <- ""
+        ev_source <- ""
+        ev_id     <- ""
+        evs <- feat$evidences
+        if (!is.null(evs) && length(evs) > 0) {
+          ev_code   <- evs[[1]]$evidenceCode %||% ""
+          ev_source <- evs[[1]]$source       %||% ""
+          ev_id     <- evs[[1]]$id           %||% ""
+        }
+
+        batch[[length(batch) + 1]] <- data.frame(
+          Accession       = acc,
+          Position        = as.integer(pos),
+          Residue         = residue,
+          Description     = desc,
+          Evidence.Code   = ev_code,
+          Evidence.Source = ev_source,
+          Evidence.ID     = ev_id,
+          stringsAsFactors = FALSE
+        )
+      }
+
+      if (length(batch) > 0) all_sites[[i]] <- do.call(rbind, batch)
+
+      Sys.sleep(0.1)
+    }, error = function(e) {
+      # Silently skip failed queries (timeout, 404, etc.)
+    })
+  }
+
+  out <- do.call(rbind, all_sites[!vapply(all_sites, is.null, logical(1))])
+  if (is.null(out) || nrow(out) == 0) return(empty_df)
+  out
+}
+
+#' Get PhosphoSitePlus known sites from KSEAapp's bundled dataset
+#'
+#' Loads KSData from KSEAapp and extracts unique substrate sites as a lookup.
+#' @return data.frame with columns: Accession, Residue.Position (e.g. "S15"),
+#'   SUB_GENE, Kinase (first associated kinase)
+get_psp_known_sites <- function() {
+  empty_df <- data.frame(
+    Accession = character(0), Residue.Position = character(0),
+    SUB_GENE = character(0), Kinase = character(0),
+    stringsAsFactors = FALSE
+  )
+
+  if (!requireNamespace("KSEAapp", quietly = TRUE)) return(empty_df)
+
+  ks_data <- NULL
+  tryCatch({
+    data("KSData", package = "KSEAapp", envir = environment())
+    ks_data <- get("KSData", envir = environment())
+  }, error = function(e) NULL)
+
+  if (is.null(ks_data)) return(empty_df)
+
+  # Build unique substrate site table
+  psp <- data.frame(
+    Accession        = ks_data$SUB_ACC_ID,
+    Residue.Position = ks_data$SUB_MOD_RSD,
+    SUB_GENE         = ks_data$SUB_GENE,
+    Kinase           = ks_data$GENE,
+    stringsAsFactors = FALSE
+  )
+  # Deduplicate: keep one kinase per site (first encountered)
+  psp <- psp[!duplicated(paste0(psp$Accession, "_", psp$Residue.Position)), ]
+  psp
+}
+
+#' Build annotated phosphosite table
+#'
+#' Merges site_info with DE results (if available), UniProt known sites,
+#' and PhosphoSitePlus known sites. Produces a single table with:
+#'   Status (Known/Novel), Database source, and evidence links.
+#'
+#' @param site_info data.frame from extract_phosphosites() or site matrix parse
+#' @param de_results optional topTable output (needs SiteID as rownames)
+#' @param uniprot_sites data.frame from query_uniprot_phosphosites()
+#' @param psp_sites data.frame from get_psp_known_sites()
+#' @return data.frame ready for DT display (HTML links in Evidence column)
+build_site_annotation_table <- function(site_info, de_results = NULL,
+                                        uniprot_sites = NULL, psp_sites = NULL) {
+  ann <- site_info
+
+  # Extract first accession from Protein.Group for matching
+  ann$Accession <- vapply(
+    strsplit(ann$Protein.Group, "[;]"),
+    function(x) trimws(x[1]),
+    character(1)
+  )
+  ann$Residue.Position <- paste0(ann$Residue, ann$Position)
+
+  # Merge DE results if available
+  if (!is.null(de_results)) {
+    de_results$SiteID <- rownames(de_results)
+    de_cols <- intersect(c("SiteID", "logFC", "adj.P.Val"), names(de_results))
+    ann <- merge(ann, de_results[, de_cols, drop = FALSE], by = "SiteID", all.x = TRUE)
+  }
+
+  # --- Match against UniProt ---
+  ann$UniProt.Known <- FALSE
+  ann$UniProt.Evidence <- ""
+  if (!is.null(uniprot_sites) && nrow(uniprot_sites) > 0) {
+    up_key <- paste0(uniprot_sites$Accession, "_", uniprot_sites$Residue,
+                     uniprot_sites$Position)
+    my_key <- paste0(ann$Accession, "_", ann$Residue.Position)
+    match_idx <- match(my_key, up_key)
+    matched <- !is.na(match_idx)
+    ann$UniProt.Known[matched] <- TRUE
+
+    # Build evidence links for matched sites
+    ann$UniProt.Evidence[matched] <- vapply(match_idx[matched], function(idx) {
+      ev_src <- uniprot_sites$Evidence.Source[idx]
+      ev_id  <- uniprot_sites$Evidence.ID[idx]
+      acc    <- uniprot_sites$Accession[idx]
+      desc   <- uniprot_sites$Description[idx]
+
+      links <- sprintf(
+        '<a href="https://www.uniprot.org/uniprotkb/%s/entry#ptm_processing" target="_blank">UniProt</a>',
+        acc
+      )
+      if (nzchar(ev_src) && ev_src == "PubMed" && nzchar(ev_id)) {
+        links <- paste0(links, sprintf(
+          ' | <a href="https://pubmed.ncbi.nlm.nih.gov/%s" target="_blank">PubMed:%s</a>',
+          ev_id, ev_id
+        ))
+      }
+      links
+    }, character(1))
+  }
+
+  # --- Match against PhosphoSitePlus ---
+  ann$PSP.Known <- FALSE
+  ann$PSP.Kinase <- ""
+  if (!is.null(psp_sites) && nrow(psp_sites) > 0) {
+    psp_key <- paste0(psp_sites$Accession, "_", psp_sites$Residue.Position)
+    my_key  <- paste0(ann$Accession, "_", ann$Residue.Position)
+    match_idx <- match(my_key, psp_key)
+    matched <- !is.na(match_idx)
+    ann$PSP.Known[matched] <- TRUE
+    ann$PSP.Kinase[matched] <- psp_sites$Kinase[match_idx[matched]]
+  }
+
+  # --- Build combined Status and Database columns ---
+  ann$Status <- ifelse(ann$UniProt.Known | ann$PSP.Known, "Known", "Novel")
+
+  ann$Database <- vapply(seq_len(nrow(ann)), function(i) {
+    sources <- character(0)
+    if (ann$UniProt.Known[i]) sources <- c(sources, "UniProt")
+    if (ann$PSP.Known[i])     sources <- c(sources, "PhosphoSitePlus")
+    if (length(sources) == 0) return("-")
+    paste(sources, collapse = ", ")
+  }, character(1))
+
+  # Build combined Evidence column (HTML)
+  ann$Evidence <- vapply(seq_len(nrow(ann)), function(i) {
+    parts <- character(0)
+    if (nzchar(ann$UniProt.Evidence[i])) {
+      parts <- c(parts, ann$UniProt.Evidence[i])
+    }
+    if (ann$PSP.Known[i]) {
+      gene <- ann$Genes[i]
+      rp   <- ann$Residue.Position[i]
+      if (!is.na(gene) && nzchar(gene)) {
+        psp_link <- sprintf(
+          '<a href="https://www.phosphosite.org/simpleSearchSubmitAction.action?searchStr=%s" target="_blank">PhosphoSitePlus</a>',
+          utils::URLencode(paste(gene, rp))
+        )
+        parts <- c(parts, psp_link)
+      }
+    }
+    if (length(parts) == 0) return("-")
+    paste(parts, collapse = " | ")
+  }, character(1))
+
+  # Select and order output columns
+  out_cols <- c("SiteID", "Genes", "Residue", "Position", "Status", "Database")
+  if ("logFC" %in% names(ann))     out_cols <- c(out_cols, "logFC")
+  if ("adj.P.Val" %in% names(ann)) out_cols <- c(out_cols, "adj.P.Val")
+  out_cols <- c(out_cols, "Evidence")
+  if (any(nzchar(ann$PSP.Kinase))) out_cols <- c(out_cols, "PSP.Kinase")
+
+  ann[, intersect(out_cols, names(ann)), drop = FALSE]
+}

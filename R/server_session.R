@@ -283,6 +283,7 @@ server_session <- function(input, output, session, values, add_to_log) {
         ksea_results = values$ksea_results,
         ksea_last_contrast = values$ksea_last_contrast,
         phospho_fasta_sequences = values$phospho_fasta_sequences,
+        phospho_annotations = values$phospho_annotations,
         # Save timestamp & version
         saved_at   = Sys.time(),
         app_version = "DE-LIMP v2.5"
@@ -343,6 +344,7 @@ server_session <- function(input, output, session, values, add_to_log) {
       values$ksea_results <- session_data$ksea_results
       values$ksea_last_contrast <- session_data$ksea_last_contrast
       values$phospho_fasta_sequences <- session_data$phospho_fasta_sequences
+      values$phospho_annotations <- session_data$phospho_annotations
 
       # Restore repro log and append load event
       values$repro_log  <- session_data$repro_log %||% values$repro_log
