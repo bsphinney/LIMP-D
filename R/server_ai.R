@@ -1,96 +1,179 @@
 server_ai <- function(input, output, session, values) {
 
-  # --- AI SUMMARY (Data Overview Tab) ---
+  # --- AI SUMMARY (Data Overview Tab) — Analyzes ALL contrasts ---
   observeEvent(input$generate_ai_summary_overview, {
-    req(values$fit, input$contrast_selector, values$y_protein, input$user_api_key)
+    req(values$fit, values$y_protein, input$user_api_key)
 
     withProgress(message = "Generating AI Summary...", value = 0, {
-      incProgress(0.2, detail = "Gathering DE data...")
+      incProgress(0.1, detail = "Gathering DE data across all comparisons...")
 
-      # Get volcano data for the current contrast
-      de_results_full <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
-      if (!"Protein.Group" %in% colnames(de_results_full)) {
-        de_results_full <- de_results_full %>% rownames_to_column("Protein.Group")
-      }
+      all_contrasts <- colnames(values$fit$contrasts)
+      n_contrasts <- length(all_contrasts)
 
-      # Add gene symbols
-      de_results_full$Accession <- str_split_fixed(de_results_full$Protein.Group, "[; ]", 2)[,1]
-      org_db_name <- detect_organism_db(de_results_full$Protein.Group)
+      # Scale top-N per contrast to manage token budget
+      top_n <- if (n_contrasts <= 3) 30 else if (n_contrasts <= 6) 20 else 10
+
+      # --- Gene mapping (done once, shared across contrasts) ---
+      first_tt <- topTable(values$fit, coef = all_contrasts[1], number = Inf) %>% as.data.frame()
+      if (!"Protein.Group" %in% colnames(first_tt)) first_tt <- first_tt %>% rownames_to_column("Protein.Group")
+      first_tt$Accession <- str_split_fixed(first_tt$Protein.Group, "[; ]", 2)[,1]
+      org_db_name <- detect_organism_db(first_tt$Protein.Group)
 
       id_map <- tryCatch({
-        if (!requireNamespace(org_db_name, quietly = TRUE)) { BiocManager::install(org_db_name, ask = FALSE) }
+        if (!requireNamespace(org_db_name, quietly = TRUE)) BiocManager::install(org_db_name, ask = FALSE)
         library(org_db_name, character.only = TRUE)
         db_obj <- get(org_db_name)
-        AnnotationDbi::select(db_obj, keys = de_results_full$Accession, columns = c("SYMBOL"), keytype = "UNIPROT") %>%
-          rename(Accession = UNIPROT, Gene = SYMBOL) %>% distinct(Accession, .keep_all = TRUE)
-      }, error = function(e) data.frame(Accession = de_results_full$Accession, Gene = de_results_full$Accession))
+        AnnotationDbi::select(db_obj, keys = first_tt$Accession, columns = c("SYMBOL"), keytype = "UNIPROT") %>%
+          dplyr::rename(Accession = UNIPROT, Gene = SYMBOL) %>% distinct(Accession, .keep_all = TRUE)
+      }, error = function(e) data.frame(Accession = first_tt$Accession, Gene = first_tt$Accession))
 
-      de_results_with_genes <- left_join(de_results_full, id_map, by = "Accession")
-      de_results_with_genes$Gene[is.na(de_results_with_genes$Gene)] <- de_results_with_genes$Accession[is.na(de_results_with_genes$Gene)]
+      # --- Per-contrast DE summaries ---
+      contrast_texts <- list()
+      all_sig_proteins <- list()  # track which proteins are sig in which contrasts
 
-      # Filter for significant and get top 50
-      top_de_data <- de_results_with_genes %>%
-        filter(adj.P.Val < 0.05) %>%
-        arrange(adj.P.Val) %>%
-        head(50) %>%
-        dplyr::select(Gene, logFC, adj.P.Val) %>%
-        mutate(across(where(is.numeric), ~round(.x, 3)))
+      for (i in seq_along(all_contrasts)) {
+        cname <- all_contrasts[i]
+        incProgress(0.1 + 0.3 * (i / n_contrasts), detail = paste0("Analyzing: ", cname, "..."))
 
-      top_de_text <- paste(capture.output(print(as.data.frame(top_de_data))), collapse = "\n")
+        tt <- topTable(values$fit, coef = cname, number = Inf) %>% as.data.frame()
+        if (!"Protein.Group" %in% colnames(tt)) tt <- tt %>% rownames_to_column("Protein.Group")
+        tt$Accession <- str_split_fixed(tt$Protein.Group, "[; ]", 2)[,1]
+        tt <- left_join(tt, id_map, by = "Accession")
+        tt$Gene[is.na(tt$Gene)] <- tt$Accession[is.na(tt$Gene)]
 
-      incProgress(0.5, detail = "Gathering stable proteins...")
+        sig <- tt %>% filter(adj.P.Val < 0.05)
+        n_up <- sum(sig$logFC > 0)
+        n_down <- sum(sig$logFC < 0)
 
-      stable_prots_df <- tryCatch({
-        df_res <- de_results_with_genes %>% filter(adj.P.Val < 0.05)
-        if(nrow(df_res) == 0) return(data.frame(Info="No significant proteins to assess for stability."))
+        # Track per-protein significance across contrasts
+        if (nrow(sig) > 0) {
+          for (pid in sig$Protein.Group) {
+            if (is.null(all_sig_proteins[[pid]])) all_sig_proteins[[pid]] <- list()
+            row <- sig[sig$Protein.Group == pid, ]
+            all_sig_proteins[[pid]][[cname]] <- list(
+              gene = row$Gene[1], logFC = round(row$logFC[1], 3), pval = round(row$adj.P.Val[1], 4)
+            )
+          }
+        }
 
-        protein_ids_for_cv <- df_res$Protein.Group
-        raw_exprs <- values$y_protein$E[protein_ids_for_cv, , drop = FALSE]
+        top_hits <- sig %>% arrange(adj.P.Val) %>% head(top_n) %>%
+          dplyr::select(Gene, logFC, adj.P.Val) %>%
+          mutate(across(where(is.numeric), ~round(.x, 3)))
+
+        top_text <- paste(capture.output(print(as.data.frame(top_hits))), collapse = "\n")
+
+        contrast_texts[[cname]] <- paste0(
+          "### ", cname, "\n",
+          "Significant proteins: ", nrow(sig), " (", n_up, " up, ", n_down, " down)\n\n",
+          "Top ", min(top_n, nrow(top_hits)), " by significance:\n", top_text
+        )
+      }
+
+      incProgress(0.5, detail = "Identifying cross-comparison biomarkers...")
+
+      # --- Cross-contrast proteins (significant in >= 2 comparisons) ---
+      multi_contrast <- names(all_sig_proteins)[sapply(all_sig_proteins, length) >= 2]
+      cross_text <- if (length(multi_contrast) > 0) {
+        cross_df <- do.call(rbind, lapply(head(multi_contrast, 10), function(pid) {
+          info <- all_sig_proteins[[pid]]
+          gene <- info[[1]]$gene
+          contrasts_str <- paste(names(info), collapse = ", ")
+          fc_str <- paste(sapply(names(info), function(cn) {
+            paste0(cn, ": ", sprintf("%+.2f", info[[cn]]$logFC))
+          }), collapse = "; ")
+          data.frame(Gene = gene, N_Comparisons = length(info), Contrasts = contrasts_str, LogFC = fc_str)
+        }))
+        cross_df <- cross_df[order(-cross_df$N_Comparisons), ]
+        paste(capture.output(print(as.data.frame(cross_df), row.names = FALSE)), collapse = "\n")
+      } else {
+        "No proteins were significant in more than one comparison."
+      }
+
+      incProgress(0.6, detail = "Computing stable biomarkers...")
+
+      # --- Stable biomarkers (lowest CV across all significant proteins) ---
+      stable_prots_text <- tryCatch({
+        all_sig_pids <- names(all_sig_proteins)
+        valid_pids <- intersect(all_sig_pids, rownames(values$y_protein$E))
+        if (length(valid_pids) == 0) return("No significant proteins to assess for stability.")
+
+        raw_exprs <- values$y_protein$E[valid_pids, , drop = FALSE]
         linear_exprs <- 2^raw_exprs
         cv_list <- list()
 
-        for(g in unique(values$metadata$Group)) {
+        for (g in unique(values$metadata$Group)) {
           if (g == "") next
           files_in_group <- values$metadata$File.Name[values$metadata$Group == g]
           group_cols <- intersect(colnames(linear_exprs), files_in_group)
           if (length(group_cols) > 1) {
             group_data <- linear_exprs[, group_cols, drop = FALSE]
             cv_list[[paste0("CV_", g)]] <- apply(group_data, 1, function(x) (sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)) * 100)
-          } else {
-            cv_list[[paste0("CV_", g)]] <- NA
           }
         }
 
-        cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
-        left_join(df_res, cv_df, by = "Protein.Group") %>%
-          rowwise() %>%
-          mutate(Avg_CV = mean(c_across(starts_with("CV_")), na.rm = TRUE)) %>%
-          ungroup() %>%
-          arrange(Avg_CV) %>%
-          head(3) %>%
-          dplyr::select(Gene, Avg_CV, logFC, adj.P.Val) %>%
-          mutate(across(where(is.numeric), ~round(.x, 2)))
-      }, error = function(e) data.frame(Error = "Could not calculate stable proteins."))
+        if (length(cv_list) == 0) return("Could not calculate CVs (not enough replicates).")
 
-      stable_prots_text <- paste(capture.output(print(as.data.frame(stable_prots_df))), collapse = "\n")
+        cv_df <- as.data.frame(cv_list) %>% rownames_to_column("Protein.Group")
+        cv_df$Avg_CV <- rowMeans(cv_df[, grep("^CV_", colnames(cv_df)), drop = FALSE], na.rm = TRUE)
+
+        # Get gene names and which contrasts each is in
+        stable_df <- cv_df %>% arrange(Avg_CV) %>% head(5)
+        stable_df$Gene <- sapply(stable_df$Protein.Group, function(pid) {
+          info <- all_sig_proteins[[pid]]
+          if (!is.null(info)) info[[1]]$gene else pid
+        })
+        stable_df$Significant_In <- sapply(stable_df$Protein.Group, function(pid) {
+          info <- all_sig_proteins[[pid]]
+          if (!is.null(info)) paste(names(info), collapse = "; ") else ""
+        })
+
+        out <- stable_df %>% dplyr::select(Gene, Avg_CV, Significant_In) %>%
+          mutate(Avg_CV = round(Avg_CV, 2))
+        paste(capture.output(print(as.data.frame(out), row.names = FALSE)), collapse = "\n")
+      }, error = function(e) "Could not calculate stable proteins.")
 
       incProgress(0.7, detail = "Constructing prompt...")
 
+      # --- Build the full prompt ---
       system_prompt <- paste0(
-        "You are a senior proteomics consultant at a core facility. Write a 3-paragraph summary of the differential expression results below.\n\n",
-        "Paragraph 1: Overview of the comparison being analyzed and total number of significant proteins (FDR < 0.05).\n",
-        "Paragraph 2: Highlight the top upregulated and downregulated proteins by fold change, using gene names when available.\n",
-        "Paragraph 3: Mention the most stable differentially expressed proteins (lowest CV) as potential high-confidence biomarkers.\n\n",
-        "Use markdown formatting. Be concise and scientific."
+        "You are a senior proteomics and systems biology consultant. Write a comprehensive ",
+        "analysis of the differential expression results across ALL comparisons below.\n\n",
+        "Structure your response with these markdown sections:\n\n",
+        "## Overview\n",
+        "Number of comparisons analyzed, total significant proteins per comparison (up/down split). ",
+        "Overall assessment of the experiment's quality and scope.\n\n",
+        "## Key Findings Per Comparison\n",
+        "For each comparison: highlight the top upregulated and downregulated proteins by fold-change ",
+        "(use gene names). Note any comparison with unusually few or many significant hits.\n\n",
+        "## Cross-Comparison Biomarkers\n",
+        "Proteins significant in multiple comparisons are highest-confidence candidates. ",
+        "Discuss consistency of direction (always up, always down, or mixed across comparisons).\n\n",
+        "## High-Confidence Biomarker Insights\n",
+        "For the most stable proteins (lowest coefficient of variation): discuss their known biological functions, ",
+        "pathway involvement, and disease associations where you recognize the gene name. ",
+        "Assess their potential as reliable biomarkers based on the combination of low CV, ",
+        "significant p-value, and meaningful fold-change.\n\n",
+        "## Biological Interpretation\n",
+        "Suggest what biological processes or pathways may be affected based on the protein lists. ",
+        "Note any well-known protein families, complexes, or signaling cascades represented. ",
+        "If the data suggests a clear biological narrative, describe it.\n\n",
+        "Use markdown formatting with headers. Be scientific but accessible."
       )
+
+      all_contrast_text <- paste(contrast_texts, collapse = "\n\n")
 
       final_prompt <- paste0(
         system_prompt,
-        "\n\n--- DATA FOR SUMMARY ---\n\n",
-        "Comparison: ", input$contrast_selector, "\n\n",
-        "Top Significant Proteins:\n", top_de_text, "\n\n",
-        "Most Stable DE Proteins:\n", stable_prots_text
+        "\n\n--- DATA FOR ANALYSIS ---\n\n",
+        "Number of comparisons: ", n_contrasts, "\n\n",
+        all_contrast_text, "\n\n",
+        "--- CROSS-COMPARISON PROTEINS (significant in >= 2 comparisons) ---\n",
+        cross_text, "\n\n",
+        "--- MOST STABLE SIGNIFICANT PROTEINS (lowest CV across replicates) ---\n",
+        stable_prots_text
       )
+
+      message(sprintf("[DE-LIMP] AI Summary prompt: %d characters, %d contrasts", nchar(final_prompt), n_contrasts))
 
       incProgress(0.8, detail = "Asking AI...")
       ai_summary <- ask_gemini_text_chat(final_prompt, input$user_api_key, input$model_name)
@@ -103,6 +186,41 @@ server_ai <- function(input, output, session, values) {
         )
       })
     })
+  })
+
+  # --- AI Summary Info Modal ---
+  observeEvent(input$ai_summary_info_btn, {
+    showModal(modalDialog(
+      title = tagList(icon("question-circle"), " About AI Summary"),
+      size = "l", easyClose = TRUE, footer = modalButton("Close"),
+      div(style = "font-size: 0.9em; line-height: 1.7;",
+        tags$h6("How it works"),
+        p("The AI Summary analyzes ", strong("all comparisons"), " in your experiment at once, not just the currently selected contrast. ",
+          "It identifies the top differentially expressed proteins per comparison, finds proteins that are significant across multiple ",
+          "comparisons (cross-comparison biomarkers), and highlights the most reproducibly measured proteins (lowest CV) as high-confidence candidates."),
+        p("The AI then provides biological interpretation, discussing known functions, pathway involvement, and disease associations for the top biomarkers."),
+        tags$h6("What data is sent to Google Gemini"),
+        tags$ul(
+          tags$li("Top significant proteins per comparison (gene names, log2 fold-changes, adjusted p-values)"),
+          tags$li("Proteins significant across multiple comparisons with their fold-changes"),
+          tags$li("Most stable significant proteins (lowest coefficient of variation across replicates)"),
+          tags$li("Number of comparisons and significance counts (up/down)")
+        ),
+        tags$h6("What is NOT sent"),
+        tags$ul(
+          tags$li("Raw expression values or intensity data"),
+          tags$li("Individual sample names or file paths"),
+          tags$li("Metadata details (groups, batches, covariates)"),
+          tags$li("QC statistics or run-level information")
+        ),
+        tags$h6("Privacy"),
+        p("Data is sent to Google's Gemini API and processed according to Google's API terms of service. ",
+          "No data is stored permanently by this app \u2014 uploaded files are deleted when your session ends."),
+        tags$h6("API key"),
+        p("You need a Google Gemini API key (enter in the sidebar). Get one free at ",
+          tags$a(href = "https://aistudio.google.com/apikey", target = "_blank", "Google AI Studio"), ".")
+      )
+    ))
   })
 
   # --- Data Chat Info Modal ---

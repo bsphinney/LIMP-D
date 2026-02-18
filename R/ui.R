@@ -319,8 +319,10 @@ build_ui <- function(is_hf_space) {
                   icon = icon("robot"),
                   div(style = "padding: 20px;",
                     # Header section
-                    div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px;",
-                      tags$h4(icon("robot"), " AI-Powered Analysis Summary", style = "margin: 0; font-weight: 500;")
+                    div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;",
+                      tags$h4(icon("robot"), " AI-Powered Analysis Summary", style = "margin: 0; font-weight: 500;"),
+                      actionButton("ai_summary_info_btn", icon("question-circle"),
+                        class = "btn-outline-light btn-sm", title = "About AI Summary")
                     ),
 
                     # Instructions
@@ -328,10 +330,11 @@ build_ui <- function(is_hf_space) {
                       tags$p(class = "mb-2",
                         icon("info-circle"), " ",
                         strong("How it works:"),
-                        " Click the button below to generate an AI-powered summary of your differential expression results."
+                        " Click the button below to generate a comprehensive AI-powered analysis across all comparisons in your experiment."
                       ),
                       tags$p(class = "mb-0", style = "font-size: 0.9em; color: #6c757d;",
-                        "The AI will analyze the top differentially expressed proteins and most stable proteins from the current comparison."
+                        "The AI will identify key DE proteins per comparison, cross-comparison biomarkers, ",
+                        "and provide biological insights on high-confidence candidates."
                       )
                     ),
 
