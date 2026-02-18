@@ -682,10 +682,23 @@ build_ui <- function(is_hf_space) {
     ),
 
     nav_panel("Gene Set Enrichment", icon = icon("sitemap"),
+              # Contrast indicator
+              uiOutput("gsea_contrast_indicator"),
               # Compact control bar
               card(
                 card_body(
                   div(style = "display: flex; align-items: center; gap: 15px; flex-wrap: wrap;",
+                    div(style = "min-width: 220px;",
+                      selectInput("gsea_ontology", NULL,
+                        choices = c(
+                          "GO: Biological Process (BP)" = "BP",
+                          "GO: Molecular Function (MF)" = "MF",
+                          "GO: Cellular Component (CC)" = "CC",
+                          "KEGG Pathways" = "KEGG"
+                        ),
+                        selected = "BP", width = "100%"
+                      )
+                    ),
                     actionButton("run_gsea", "\u25B6 Run GSEA", class = "btn-success", icon = icon("play")),
                     div(style = "flex-grow: 1;",
                       verbatimTextOutput("gsea_status", placeholder = TRUE) |>
@@ -694,7 +707,7 @@ build_ui <- function(is_hf_space) {
                     actionButton("gsea_info_btn", icon("question-circle"), title = "What is GSEA?",
                       class = "btn-outline-info btn-sm")
                   ),
-                  p("Performs Gene Ontology enrichment analysis on DE results. Auto-detects organism (Human/Mouse).",
+                  p("Enrichment analysis on DE results. Auto-detects organism. Results cached per ontology.",
                     class = "text-muted small", style = "margin: 10px 0 0 0;")
                 )
               ),

@@ -263,6 +263,9 @@ server_session <- function(input, output, session, values, add_to_log) {
         design     = values$design,
         qc_stats   = values$qc_stats,
         gsea_results = values$gsea_results,
+        gsea_results_cache = values$gsea_results_cache,
+        gsea_last_contrast = values$gsea_last_contrast,
+        gsea_last_org_db = values$gsea_last_org_db,
         repro_log  = values$repro_log,
         color_plot_by_de = values$color_plot_by_de,
         # Store UI state so it can be restored
@@ -329,6 +332,9 @@ server_session <- function(input, output, session, values, add_to_log) {
       values$design     <- session_data$design
       values$qc_stats   <- session_data$qc_stats
       values$gsea_results <- session_data$gsea_results
+      if (!is.null(session_data$gsea_results_cache)) values$gsea_results_cache <- session_data$gsea_results_cache
+      values$gsea_last_contrast <- session_data$gsea_last_contrast
+      values$gsea_last_org_db <- session_data$gsea_last_org_db
       values$color_plot_by_de <- session_data$color_plot_by_de %||% FALSE
       values$cov1_name  <- session_data$cov1_name %||% "Covariate1"
       values$cov2_name  <- session_data$cov2_name %||% "Covariate2"
@@ -454,9 +460,26 @@ server_session <- function(input, output, session, values, add_to_log) {
       "at 5% FDR.\n\n",
 
       "6. GENE SET ENRICHMENT ANALYSIS (Optional)\n",
-      "When performed, over-representation analysis (ORA) was conducted using clusterProfiler.\n",
-      "Significant proteins (adj.P.Val < 0.05) were mapped to Gene Ontology (GO) terms, and\n",
-      "enrichment was tested using hypergeometric distribution with FDR correction.\n\n\n",
+      "When performed, Gene Set Enrichment Analysis (GSEA) was conducted using clusterProfiler.\n",
+      "Proteins were ranked by log2 fold-change and mapped from UniProt accessions to Entrez\n",
+      "Gene IDs using organism-specific annotation databases (org.Hs.eg.db for human,\n",
+      "org.Mm.eg.db for mouse, etc.).\n\n",
+
+      "  Available enrichment databases:\n",
+      "    \u2022 GO Biological Process (BP): Biological programs and pathways\n",
+      "    \u2022 GO Molecular Function (MF): Molecular activities of gene products\n",
+      "    \u2022 GO Cellular Component (CC): Subcellular localization of proteins\n",
+      "    \u2022 KEGG Pathways: Metabolic and signaling pathway maps\n\n",
+
+      "  GSEA parameters:\n",
+      "    \u2022 Minimum gene set size: 10\n",
+      "    \u2022 Maximum gene set size: 500\n",
+      "    \u2022 P-value cutoff: 0.05\n",
+      "    \u2022 Multiple testing correction: Benjamini-Hochberg FDR\n\n",
+
+      "  The Normalized Enrichment Score (NES) indicates direction and magnitude:\n",
+      "    \u2022 Positive NES: Gene set enriched in up-regulated proteins\n",
+      "    \u2022 Negative NES: Gene set enriched in down-regulated proteins\n\n\n",
 
       "SOFTWARE AND PACKAGES\n",
       "---------------------\n",
@@ -464,7 +487,8 @@ server_session <- function(input, output, session, values, add_to_log) {
       "Statistical framework: limma (Linear Models for Microarray and RNA-Seq Data)\n",
       "Data manipulation: dplyr, tidyr\n",
       "Visualization: ggplot2, ComplexHeatmap, plotly\n",
-      "Enrichment: clusterProfiler, enrichplot\n",
+      "Enrichment: clusterProfiler (gseGO, gseKEGG), enrichplot\n",
+      "Annotation DBs: org.Hs.eg.db, org.Mm.eg.db (auto-detected)\n",
       sprintf("R version: %s\n\n\n", R.version.string),
 
       "REFERENCES\n",
@@ -476,7 +500,9 @@ server_session <- function(input, output, session, values, add_to_log) {
       "  Molecular Biology 3:Article3\n",
       "\u2022 FDR control: Benjamini Y, Hochberg Y (1995) Journal of the Royal Statistical\n",
       "  Society 57(1):289-300\n",
-      "\u2022 clusterProfiler: Yu G, et al. (2012) OMICS 16(5):284-287\n\n\n",
+      "\u2022 clusterProfiler: Yu G, et al. (2012) OMICS 16(5):284-287\n",
+      "\u2022 GSEA method: Subramanian A, et al. (2005) PNAS 102(43):15545-15550\n",
+      "\u2022 KEGG database: Kanehisa M, Goto S (2000) Nucleic Acids Research 28(1):27-30\n\n\n",
 
       "CITATION\n",
       "--------\n",

@@ -200,6 +200,7 @@ server <- function(input, output, session) {
     dpc_fit = NULL, status = "Waiting...", design = NULL, qc_stats = NULL,
     plot_selected_proteins = NULL, chat_history = list(),
     current_file_uri = NULL, gsea_results = NULL,
+    gsea_results_cache = list(), gsea_last_contrast = NULL, gsea_last_org_db = NULL,
     repro_log = c(
       "# ==============================================================================",
       "# DE-LIMP Reproducibility Log",
