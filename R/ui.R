@@ -80,7 +80,7 @@ build_ui <- function(is_hf_space) {
     .selectize-dropdown {
       z-index: 10000 !important;
     }
-    .tab-pane, .card, .card-body, .tab-content {
+    .tab-pane, .tab-content {
       overflow: visible !important;
     }
   "))),
@@ -265,7 +265,7 @@ build_ui <- function(is_hf_space) {
                 nav_panel("Signal Distribution",
                   icon = icon("chart-area"),
                   # Comparison selector banner
-                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;",
+                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; position: relative; z-index: 10;",
                     div(style = "display: flex; align-items: center; gap: 10px; white-space: nowrap;",
                       icon("microscope"),
                       span("Viewing Comparison:", style = "font-weight: 500;")
@@ -299,7 +299,7 @@ build_ui <- function(is_hf_space) {
                 nav_panel("Expression Grid",
                   icon = icon("th"),
                   # Comparison selector banner
-                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;",
+                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; position: relative; z-index: 10;",
                     div(style = "display: flex; align-items: center; gap: 10px; white-space: nowrap;",
                       icon("microscope"),
                       span("Viewing Comparison:", style = "font-weight: 500;")
@@ -516,7 +516,7 @@ build_ui <- function(is_hf_space) {
                 nav_panel("P-value Distribution",
                   icon = icon("chart-column"),
                   # Comparison selector banner — two-row layout for full-width dropdown
-                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px;",
+                  div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; position: relative; z-index: 10;",
                     div(style = "display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;",
                       div(style = "display: flex; align-items: center; gap: 10px;",
                         icon("microscope"),
@@ -534,21 +534,18 @@ build_ui <- function(is_hf_space) {
                       width = "100%"
                     )
                   ),
-                  card_body(
+                  # Plot (plain div — card_body creates stacking context that clips dropdown)
+                  plotOutput("pvalue_histogram", height = "calc(100vh - 400px)"),
 
-                    # Plot
-                    plotOutput("pvalue_histogram", height = "calc(100vh - 400px)"),
-
-                    # Automated contextual guidance (below plot, away from dropdown)
-                    uiOutput("pvalue_guidance")
-                  )
+                  # Automated contextual guidance (below plot)
+                  uiOutput("pvalue_guidance")
                 )
               )
     ),
 
     nav_panel("DE Dashboard", icon = icon("table-columns"),
               # Interactive comparison selector
-              div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;",
+              div(style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; position: relative; z-index: 10;",
                 div(style = "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;",
                   div(style = "display: flex; align-items: center; gap: 15px;",
                     icon("microscope"),

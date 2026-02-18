@@ -139,21 +139,124 @@ server_gsea <- function(input, output, session, values, add_to_log) {
       tryCatch({
         # --- Step 1: Prepare gene list ---
         incProgress(0.1, detail = "Preparing gene list...")
-        de_results <- topTable(values$fit, coef = input$contrast_selector, number = Inf)
-        org_db_name <- detect_organism_db(rownames(de_results))
+        de_results <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>%
+          as.data.frame()
+
+        # Extract Protein.Group (may be a column or in rownames)
+        if (!"Protein.Group" %in% colnames(de_results)) {
+          de_results <- de_results %>% rownames_to_column("Protein.Group")
+        }
+
+        incProgress(0.3, detail = "Converting Gene IDs...")
+
+        # Extract accessions from Protein.Group — handles multiple formats:
+        #   "P12345;Q67890"        → "P12345"  (semicolon-separated groups)
+        #   "sp|P12345|NAME_HUMAN" → "P12345"  (full UniProt format)
+        #   "P12345-2"             → "P12345"  (isoform suffix)
+        #   "P12345_HUMAN"         → "P12345"  (organism suffix)
+        #   "TP53"                 → "TP53"    (gene symbol — fallback)
+        raw_ids <- str_split_fixed(de_results$Protein.Group, "[; ]", 2)[, 1]
+
+        # Handle sp|ACC|NAME or tr|ACC|NAME pipe format
+        pipe_parts <- str_split_fixed(raw_ids, "\\|", 3)
+        if (ncol(pipe_parts) >= 2 && any(pipe_parts[, 1] %in% c("sp", "tr"))) {
+          raw_ids <- pipe_parts[, 2]
+        }
+
+        # Strip isoform suffix (-2, -3) and organism suffix (_HUMAN, _MOUSE)
+        clean_ids <- sub("-\\d+$", "", raw_ids)
+        clean_ids <- sub("_[A-Z]{2,}$", "", clean_ids)
+        de_results$Accession <- clean_ids
+
+        message(sprintf("[DE-LIMP GSEA] Sample IDs (first 5): %s",
+                        paste(head(clean_ids, 5), collapse = ", ")))
+
+        # --- Organism detection ---
+        # 1. Try suffix-based detection (fast, no network)
+        org_db_name <- detect_organism_db(de_results$Protein.Group)
+
+        # 2. If defaulted to human (no suffix found), query UniProt API
+        #    to determine actual organism from the accession
+        if (org_db_name == "org.Hs.eg.db" &&
+            !any(grepl("_HUMAN", de_results$Protein.Group, ignore.case = TRUE))) {
+
+          message("[DE-LIMP GSEA] No organism suffix found. Querying UniProt API...")
+          tax_to_orgdb <- c(
+            "9606" = "org.Hs.eg.db", "10090" = "org.Mm.eg.db",
+            "10116" = "org.Rn.eg.db", "9913" = "org.Bt.eg.db",
+            "9615" = "org.Cf.eg.db", "9031" = "org.Gg.eg.db",
+            "7227" = "org.Dm.eg.db", "6239" = "org.Ce.eg.db",
+            "7955" = "org.Dr.eg.db", "559292" = "org.Sc.sgd.db",
+            "3702" = "org.At.tair.db", "9823" = "org.Ss.eg.db"
+          )
+
+          # Query a few accessions to determine organism
+          sample_acc <- head(clean_ids[grepl("^[A-Z][0-9]", clean_ids)], 3)
+          for (acc in sample_acc) {
+            api_org <- tryCatch({
+              resp <- httr2::request(paste0("https://rest.uniprot.org/uniprotkb/", acc)) |>
+                httr2::req_headers(Accept = "application/json") |>
+                httr2::req_timeout(10) |>
+                httr2::req_perform()
+              data <- httr2::resp_body_json(resp)
+              tax_id <- as.character(data$organism$taxonId)
+              message(sprintf("[DE-LIMP GSEA] UniProt %s → taxon %s (%s)",
+                              acc, tax_id, data$organism$scientificName))
+              tax_to_orgdb[tax_id]
+            }, error = function(e) {
+              message(sprintf("[DE-LIMP GSEA] UniProt API lookup failed for %s: %s", acc, e$message))
+              NA_character_
+            })
+            if (!is.na(api_org)) {
+              org_db_name <- api_org
+              break
+            }
+          }
+        }
+
+        message(sprintf("[DE-LIMP GSEA] Using organism database: %s", org_db_name))
+
         if (!requireNamespace(org_db_name, quietly = TRUE)) {
-          BiocManager::install(org_db_name, ask = FALSE)
+          BiocManager::install(org_db_name, ask = FALSE, update = FALSE, quiet = TRUE)
         }
         library(org_db_name, character.only = TRUE)
 
-        incProgress(0.3, detail = "Converting Gene IDs...")
-        protein_ids <- str_extract(rownames(de_results), "[A-Z0-9]+")
-        id_map <- bitr(protein_ids, fromType = "UNIPROT", toType = "ENTREZID",
-                       OrgDb = get(org_db_name))
-        de_results_mapped <- de_results[rownames(de_results) %in% id_map$UNIPROT, ]
-        de_results_mapped$ENTREZID <- id_map$ENTREZID[
-          match(str_extract(rownames(de_results_mapped), "[A-Z0-9]+"), id_map$UNIPROT)
-        ]
+        # --- ID mapping (UNIPROT → ENTREZID, fallback to SYMBOL) ---
+        id_map <- tryCatch({
+          result <- bitr(clean_ids, fromType = "UNIPROT", toType = "ENTREZID",
+                         OrgDb = get(org_db_name))
+          if (nrow(result) > 0) result else NULL
+        }, error = function(e) NULL)
+        from_type <- "UNIPROT"
+
+        if (is.null(id_map)) {
+          message("[DE-LIMP GSEA] UNIPROT mapping failed. Trying SYMBOL...")
+          id_map <- tryCatch({
+            result <- bitr(clean_ids, fromType = "SYMBOL", toType = "ENTREZID",
+                           OrgDb = get(org_db_name))
+            if (nrow(result) > 0) result else NULL
+          }, error = function(e) NULL)
+          from_type <- "SYMBOL"
+        }
+
+        if (is.null(id_map) || nrow(id_map) == 0) {
+          stop(paste0(
+            "Could not map protein IDs to Entrez Gene IDs.\n",
+            "Sample IDs: ", paste(head(clean_ids, 5), collapse = ", "), "\n",
+            "Organism DB: ", org_db_name, "\n",
+            "Please ensure your data uses standard UniProt accessions or gene symbols."
+          ))
+        }
+
+        message(sprintf("[DE-LIMP GSEA] Mapped %d / %d IDs using %s (%s)",
+                        nrow(id_map), length(clean_ids), from_type, org_db_name))
+
+        id_col <- names(id_map)[1]
+        id_map <- id_map %>% distinct(across(all_of(id_col)), .keep_all = TRUE)
+
+        de_results_mapped <- de_results %>%
+          inner_join(id_map, by = setNames(id_col, "Accession"))
+
         gene_list <- de_results_mapped$logFC
         names(gene_list) <- de_results_mapped$ENTREZID
         gene_list <- sort(gene_list, decreasing = TRUE)
@@ -235,10 +338,11 @@ server_gsea <- function(input, output, session, values, add_to_log) {
             sprintf("library(%s)", org_db_name),
             "",
             sprintf("de_results <- topTable(fit, coef='%s', number=Inf)", input$contrast_selector),
-            "protein_ids <- str_extract(rownames(de_results), '[A-Z0-9]+')",
-            sprintf("id_map <- bitr(protein_ids, fromType='UNIPROT', toType='ENTREZID', OrgDb=%s)", org_db_name),
-            "de_results_mapped <- de_results[rownames(de_results) %in% id_map$UNIPROT, ]",
-            "de_results_mapped$ENTREZID <- id_map$ENTREZID[match(str_extract(rownames(de_results_mapped), '[A-Z0-9]+'), id_map$UNIPROT)]",
+            "if (!'Protein.Group' %in% colnames(de_results)) de_results <- de_results %>% rownames_to_column('Protein.Group')",
+            "de_results$Accession <- str_split_fixed(de_results$Protein.Group, '[; ]', 2)[, 1]",
+            sprintf("id_map <- bitr(de_results$Accession, fromType='UNIPROT', toType='ENTREZID', OrgDb=%s)", org_db_name),
+            "id_map <- id_map %>% distinct(UNIPROT, .keep_all=TRUE)",
+            "de_results_mapped <- de_results %>% inner_join(id_map, by=c('Accession'='UNIPROT'))",
             "gene_list <- de_results_mapped$logFC",
             "names(gene_list) <- de_results_mapped$ENTREZID",
             "gene_list <- sort(gene_list, decreasing=TRUE)",
@@ -261,10 +365,11 @@ server_gsea <- function(input, output, session, values, add_to_log) {
             "library(clusterProfiler)",
             "",
             sprintf("de_results <- topTable(fit, coef='%s', number=Inf)", input$contrast_selector),
-            "protein_ids <- str_extract(rownames(de_results), '[A-Z0-9]+')",
-            sprintf("id_map <- bitr(protein_ids, fromType='UNIPROT', toType='ENTREZID', OrgDb=%s)", org_db_name),
-            "de_results_mapped <- de_results[rownames(de_results) %in% id_map$UNIPROT, ]",
-            "de_results_mapped$ENTREZID <- id_map$ENTREZID[match(str_extract(rownames(de_results_mapped), '[A-Z0-9]+'), id_map$UNIPROT)]",
+            "if (!'Protein.Group' %in% colnames(de_results)) de_results <- de_results %>% rownames_to_column('Protein.Group')",
+            "de_results$Accession <- str_split_fixed(de_results$Protein.Group, '[; ]', 2)[, 1]",
+            sprintf("id_map <- bitr(de_results$Accession, fromType='UNIPROT', toType='ENTREZID', OrgDb=%s)", org_db_name),
+            "id_map <- id_map %>% distinct(UNIPROT, .keep_all=TRUE)",
+            "de_results_mapped <- de_results %>% inner_join(id_map, by=c('Accession'='UNIPROT'))",
             "gene_list <- de_results_mapped$logFC",
             "names(gene_list) <- de_results_mapped$ENTREZID",
             "gene_list <- sort(gene_list, decreasing=TRUE)",
