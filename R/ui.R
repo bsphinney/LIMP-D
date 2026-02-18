@@ -460,7 +460,12 @@ build_ui <- function(is_hf_space) {
                 nav_panel("MDS Plot",
                   icon = icon("project-diagram"),
                   card_body(
-                    div(style = "display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px;",
+                    div(style = "display: flex; justify-content: flex-end; gap: 8px; align-items: center; margin-bottom: 10px;",
+                      span("Color by:", style = "font-weight: 500; font-size: 0.85em; color: #555;"),
+                      div(style = "width: 160px;",
+                        selectInput("mds_color_by", label = NULL,
+                          choices = c("Group", "Batch"), selected = "Group", width = "100%")
+                      ),
                       actionButton("mds_info_btn", icon("question-circle"), title = "What is MDS?",
                         class = "btn-outline-info btn-sm"),
                       actionButton("fullscreen_mds", "\U0001F50D Fullscreen",

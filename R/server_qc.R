@@ -139,13 +139,51 @@ server_qc <- function(input, output, session, values) {
   #  5. MDS Plot
   # ============================================================================
 
+  # Update MDS "Color by" dropdown when metadata changes (includes custom covariate names)
+  observeEvent(values$metadata, {
+    req(values$metadata)
+    meta <- values$metadata
+    color_choices <- "Group"
+    if ("Batch" %in% colnames(meta) && any(nzchar(meta$Batch))) color_choices <- c(color_choices, "Batch")
+    # Add custom covariates if they have data
+    cov1_name <- if (!is.null(values$cov1_name) && nzchar(values$cov1_name)) values$cov1_name else "Covariate1"
+    cov2_name <- if (!is.null(values$cov2_name) && nzchar(values$cov2_name)) values$cov2_name else "Covariate2"
+    if ("Covariate1" %in% colnames(meta) && any(nzchar(meta$Covariate1))) {
+      color_choices <- c(color_choices, setNames("Covariate1", cov1_name))
+    }
+    if ("Covariate2" %in% colnames(meta) && any(nzchar(meta$Covariate2))) {
+      color_choices <- c(color_choices, setNames("Covariate2", cov2_name))
+    }
+    updateSelectInput(session, "mds_color_by", choices = color_choices, selected = "Group")
+  })
+
+  # Helper: get MDS color variable from metadata
+  mds_color_data <- function(meta) {
+    color_by <- input$mds_color_by %||% "Group"
+    col_name <- if (color_by %in% colnames(meta)) color_by else "Group"
+    vals <- meta[[col_name]]
+    vals[is.na(vals) | vals == ""] <- "(unassigned)"
+    grps <- factor(vals)
+    # Use a colorblind-friendly palette (up to 12 levels, then fall back to rainbow)
+    palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
+                 "#D55E00", "#CC79A7", "#999999", "#000000", "#66A61E", "#E6AB02", "#A6761D")
+    n_lvl <- length(levels(grps))
+    cols <- if (n_lvl <= length(palette)) palette[1:n_lvl] else rainbow(n_lvl)
+    # Build label for legend header
+    label <- color_by
+    if (color_by == "Covariate1" && !is.null(values$cov1_name) && nzchar(values$cov1_name)) label <- values$cov1_name
+    if (color_by == "Covariate2" && !is.null(values$cov2_name) && nzchar(values$cov2_name)) label <- values$cov2_name
+    list(grps = grps, cols = cols, label = label)
+  }
+
   output$mds_plot <- renderPlot({
     req(values$y_protein, values$metadata)
     meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]
-    grps <- factor(meta$Group); cols <- rainbow(length(levels(grps)))
-    limpa::plotMDSUsingSEs(values$y_protein, pch = 16, main = "MDS Plot", col = cols[grps])
-    legend("bottomright", legend = levels(grps), col = cols, pch = 16,
-           bg = "white", box.col = "gray80", cex = 0.9)
+    cd <- mds_color_data(meta)
+    limpa::plotMDSUsingSEs(values$y_protein, pch = 16,
+      main = paste0("MDS Plot (colored by ", cd$label, ")"), col = cd$cols[cd$grps])
+    legend("bottomright", legend = levels(cd$grps), col = cd$cols[1:length(levels(cd$grps))],
+           pch = 16, bg = "white", box.col = "gray80", cex = 0.9, title = cd$label)
   }) # Height controlled by UI (70vh)
 
   # ============================================================================
@@ -529,10 +567,11 @@ server_qc <- function(input, output, session, values) {
   output$mds_plot_fs <- renderPlot({
     req(values$y_protein, values$metadata)
     meta <- values$metadata[match(colnames(values$y_protein$E), values$metadata$File.Name), ]
-    grps <- factor(meta$Group); cols <- rainbow(length(levels(grps)))
-    limpa::plotMDSUsingSEs(values$y_protein, pch = 16, main = "MDS Plot", col = cols[grps])
-    legend("bottomright", legend = levels(grps), col = cols, pch = 16,
-           bg = "white", box.col = "gray80", cex = 0.9)
+    cd <- mds_color_data(meta)
+    limpa::plotMDSUsingSEs(values$y_protein, pch = 16,
+      main = paste0("MDS Plot (colored by ", cd$label, ")"), col = cd$cols[cd$grps])
+    legend("bottomright", legend = levels(cd$grps), col = cd$cols[1:length(levels(cd$grps))],
+           pch = 16, bg = "white", box.col = "gray80", cex = 0.9, title = cd$label)
   }, height = 700)
 
   # --- Group QC Distribution Violin (QC Plots) ---
