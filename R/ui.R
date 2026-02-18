@@ -75,6 +75,14 @@ build_ui <- function(is_hf_space) {
     div[style*='linear-gradient'] .shiny-input-container {
       margin-bottom: 0 !important;
     }
+
+    /* Ensure selectize dropdowns render above plots and card bodies */
+    .selectize-dropdown {
+      z-index: 10000 !important;
+    }
+    .tab-pane, .card, .card-body, .tab-content {
+      overflow: visible !important;
+    }
   "))),
 
   tags$head(tags$script(HTML("
