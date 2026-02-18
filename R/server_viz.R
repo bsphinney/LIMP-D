@@ -133,7 +133,36 @@ server_viz <- function(input, output, session, values, add_to_log, is_hf_space) 
   # --- GRID VIEW & PLOT LOGIC (lines 1064-1191) ---
   grid_react_df <- reactive({
     req(values$fit, values$y_protein, values$metadata, input$contrast_selector)
-    df_volc <- volcano_data()
+
+    # Build volcano-style DE data directly (volcano_data() is local to server_de)
+    df_raw <- topTable(values$fit, coef = input$contrast_selector, number = Inf) %>% as.data.frame()
+    if (!"Protein.Group" %in% colnames(df_raw)) {
+      df_raw <- df_raw %>% rownames_to_column("Protein.Group")
+    }
+    df_raw$Accession <- str_split_fixed(df_raw$Protein.Group, "[; ]", 2)[, 1]
+
+    org_db_name <- detect_organism_db(df_raw$Protein.Group)
+    id_map <- tryCatch({
+      if (!requireNamespace(org_db_name, quietly = TRUE)) BiocManager::install(org_db_name, ask = FALSE)
+      library(org_db_name, character.only = TRUE)
+      bitr(df_raw$Accession, fromType = "UNIPROT", toType = c("SYMBOL", "GENENAME"), OrgDb = get(org_db_name))
+    }, error = function(e) NULL)
+
+    if (!is.null(id_map)) {
+      id_map <- id_map %>% distinct(UNIPROT, .keep_all = TRUE)
+      df_raw <- df_raw %>%
+        left_join(id_map, by = c("Accession" = "UNIPROT")) %>%
+        mutate(Gene = ifelse(is.na(SYMBOL), Accession, SYMBOL),
+               Protein.Name = ifelse(is.na(GENENAME), Protein.Group, GENENAME))
+    } else {
+      df_raw$Gene <- df_raw$Accession
+      df_raw$Protein.Name <- df_raw$Protein.Group
+    }
+
+    df_raw$Significance <- "Not Sig"
+    df_raw$Significance[df_raw$adj.P.Val < 0.05 & abs(df_raw$logFC) > input$logfc_cutoff] <- "Significant"
+
+    df_volc <- df_raw
     df_exprs <- as.data.frame(values$y_protein$E) %>% rownames_to_column("Protein.Group")
     df_merged <- left_join(df_volc, df_exprs, by="Protein.Group")
     if (!is.null(values$plot_selected_proteins)) { df_merged <- df_merged %>% filter(Protein.Group %in% values$plot_selected_proteins) }
