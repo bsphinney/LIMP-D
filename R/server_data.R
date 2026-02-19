@@ -227,45 +227,99 @@ server_data <- function(input, output, session, values, add_to_log, is_hf_space)
   observeEvent(input$guess_groups, {
     req(values$metadata)
     meta <- if(!is.null(input$hot_metadata)) hot_to_r(input$hot_metadata) else values$metadata
+    n <- nrow(meta)
+    if (n < 2) return()
 
-    cleaned_filenames <- str_remove(meta$File.Name, "^\\d{8}_")
-    cleaned_filenames <- str_remove_all(cleaned_filenames, "_deepfrac|\\.parquet")
-    keywords <- c("affinisepACN", "affinisepIPA", "Control", "Treatment", "Evosep", "Affinisep")
+    # Use basenames, strip common extensions and leading date stamps
+    fnames <- basename(meta$File.Name)
+    fnames <- sub("\\.(d|raw|mzML|parquet)$", "", fnames, ignore.case = TRUE)
+    fnames <- sub("^\\d{6,10}_", "", fnames)
 
-    find_best_match <- function(filename_clean) {
-      matches <- keywords[str_detect(filename_clean, regex(keywords, ignore_case = TRUE))]
-      if (length(matches) == 0) return("") else return(matches[which.max(nchar(matches))])
+    # --- Strategy 1: Try known keywords first ---
+    keywords <- c("affinisepACN", "affinisepIPA", "Control", "Treatment",
+                   "Evosep", "Affinisep", "EGF", "untreat", "untreated",
+                   "treated", "KO", "WT", "wildtype", "mutant", "vehicle",
+                   "drug", "stim", "unstim", "inhibitor", "DMSO")
+
+    find_keyword_match <- function(fname) {
+      matches <- keywords[stringr::str_detect(fname, stringr::regex(keywords, ignore_case = TRUE))]
+      if (length(matches) == 0) return("")
+      matches[which.max(nchar(matches))]
     }
 
-    guessed_groups <- sapply(cleaned_filenames, find_best_match)
+    guessed <- vapply(fnames, find_keyword_match, character(1), USE.NAMES = FALSE)
 
-    # Find indices of unmatched samples
-    unmatched_indices <- which(guessed_groups == "")
-
-    # Use flag to detect if this is the example data
-    if (!is.null(values$is_example_data) && values$is_example_data && length(unmatched_indices) >= 3) {
-      # For example data: set last 3 unmatched samples to "Evosep"
-      last_three <- tail(unmatched_indices, 3)
-      guessed_groups[last_three] <- "Evosep"
-      # Set any remaining unmatched to generic Sample_X
-      remaining_unmatched <- setdiff(unmatched_indices, last_three)
+    # Check if keywords produced at least 2 groups
+    keyword_groups <- unique(guessed[guessed != ""])
+    if (length(keyword_groups) >= 2) {
+      # Keywords worked — assign remaining as Sample_X
       sample_counter <- 0
-      for (i in remaining_unmatched) {
+      for (i in which(guessed == "")) {
         sample_counter <- sample_counter + 1
-        guessed_groups[i] <- paste0("Sample_", sample_counter)
+        guessed[i] <- paste0("Sample_", sample_counter)
       }
-    } else {
-      # Standard behavior: all unmatched become Sample_X
-      sample_counter <- 0
-      for (i in seq_along(guessed_groups)) {
-        if (guessed_groups[i] == "") {
-          sample_counter <- sample_counter + 1
-          guessed_groups[i] <- paste0("Sample_", sample_counter)
-        }
-      }
+      meta$Group <- guessed
+      values$metadata <- meta
+      return()
     }
 
-    meta$Group <- guessed_groups
+    # --- Strategy 2: Token-based auto-detection ---
+    # Split filenames into tokens, find tokens that partition samples into groups
+    tokens_per_file <- strsplit(fnames, "[_\\-\\.]+")
+
+    # Collect all unique tokens (excluding pure numbers and very short ones)
+    all_tokens <- unique(unlist(tokens_per_file))
+    all_tokens <- all_tokens[nchar(all_tokens) >= 3]
+    all_tokens <- all_tokens[!grepl("^[0-9]+$", all_tokens)]
+
+    # For each token, check how many files contain it
+    token_presence <- vapply(all_tokens, function(tok) {
+      sum(vapply(tokens_per_file, function(toks) tok %in% toks, logical(1)))
+    }, integer(1))
+
+    # Good discriminating tokens appear in SOME but not ALL files (2+ groups)
+    discriminating <- all_tokens[token_presence > 0 & token_presence < n]
+
+    if (length(discriminating) > 0) {
+      # Score tokens: prefer those that create balanced groups (close to n/2)
+      token_scores <- vapply(discriminating, function(tok) {
+        count <- token_presence[tok]
+        # Penalize tokens in too many or too few files; prefer near n/2
+        balance <- 1 - abs(count / n - 0.5) * 2
+        # Prefer longer tokens (more specific)
+        specificity <- min(nchar(tok) / 10, 1)
+        balance * 0.7 + specificity * 0.3
+      }, numeric(1))
+
+      best_token <- discriminating[which.max(token_scores)]
+
+      # Assign groups based on presence/absence of best token
+      has_token <- vapply(tokens_per_file, function(toks) best_token %in% toks, logical(1))
+
+      # Try to find a second discriminating token for the "other" group
+      other_indices <- which(!has_token)
+      other_tokens <- unique(unlist(tokens_per_file[other_indices]))
+      other_tokens <- setdiff(other_tokens, unlist(tokens_per_file[has_token]))
+      other_tokens <- other_tokens[nchar(other_tokens) >= 3 & !grepl("^[0-9]+$", other_tokens)]
+
+      other_label <- if (length(other_tokens) > 0) {
+        # Pick the most common non-shared token among the "other" group
+        other_counts <- vapply(other_tokens, function(tok) {
+          sum(vapply(tokens_per_file[other_indices], function(toks) tok %in% toks, logical(1)))
+        }, integer(1))
+        other_tokens[which.max(other_counts)]
+      } else {
+        paste0("non_", best_token)
+      }
+
+      guessed <- ifelse(has_token, best_token, other_label)
+      meta$Group <- guessed
+      values$metadata <- meta
+      return()
+    }
+
+    # --- Fallback: number all samples ---
+    meta$Group <- paste0("Sample_", seq_len(n))
     values$metadata <- meta
   })
 
