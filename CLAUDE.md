@@ -37,7 +37,6 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 | `R/helpers_xic.R` | `detect_xic_format()`, `load_xic_for_protein()`, `reshape_xic_for_plotting()` |
 | `R/helpers_phospho.R` | `detect_phospho()`, `parse_phospho_positions()`, `extract_phosphosites()` (~210 lines) |
 | `R/server_phospho.R` | Phospho site-level DE, volcano, site table, residue dist, completeness QC (~650 lines) |
-| `DE-LIMP.R` | Legacy single-file copy (pre-modularization, for backwards compat) |
 | `Dockerfile` | Docker container for HF Spaces and HPC deployment |
 | `HPC_DEPLOYMENT.md` | Guide for HPC cluster deployment with Apptainer/Singularity |
 | `USER_GUIDE.md` | End-user documentation |
@@ -159,8 +158,6 @@ Rscript -e "shiny::runApp('/Users/brettphinney/Documents/claude/', port=3838)" &
 - Stop: `pkill -f "shiny::runApp"` or `Ctrl+C`
 - Check if running: `lsof -i :3838`
 
-### DE-LIMP.R (Legacy)
-`DE-LIMP.R` is the old single-file monolith kept for backwards compatibility. The active app is now directory-based (`app.R` + `R/` directory). Do NOT edit `DE-LIMP.R` — it will be removed in a future release.
 
 ## Deployment
 
