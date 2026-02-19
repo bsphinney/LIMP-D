@@ -130,25 +130,45 @@ server_phospho <- function(input, output, session, values, add_to_log) {
         # Parse the site matrix TSV
         mat_df <- utils::read.delim(site_tmp, check.names = FALSE, stringsAsFactors = FALSE)
 
-        # Extract site info columns and numeric matrix (same logic as site matrix upload)
-        info_cols <- c("Protein.Group", "Protein.Ids", "Protein.Names",
-                       "Genes", "Modified.Sequence", "Stripped.Sequence")
-        present_cols <- intersect(info_cols, names(mat_df))
-        numeric_cols <- setdiff(names(mat_df), info_cols)
+        # Identify numeric vs info columns by checking actual content
+        is_numeric_col <- vapply(mat_df, function(col) {
+          is.numeric(col) || all(grepl("^[0-9eE.+\\-]*$", col[!is.na(col) & col != ""]))
+        }, logical(1))
+        numeric_cols <- names(mat_df)[is_numeric_col]
+        info_col_names <- names(mat_df)[!is_numeric_col]
 
         mat <- as.matrix(mat_df[, numeric_cols, drop = FALSE])
+        storage.mode(mat) <- "double"
         mat[mat == 0] <- NA
         mat <- log2(mat)
 
-        # Build site info
-        site_info <- if (length(present_cols) > 0) {
-          mat_df[, present_cols, drop = FALSE]
+        # Build site info from non-numeric columns
+        site_info <- if (length(info_col_names) > 0) {
+          mat_df[, info_col_names, drop = FALSE]
         } else {
           data.frame(row.names = seq_len(nrow(mat)))
         }
 
-        # Parse site IDs from modified sequences if available
-        if ("Modified.Sequence" %in% names(site_info)) {
+        # Map column names to standard names for downstream compatibility
+        col_map <- c(
+          "Protein" = "Protein.Group", "Protein.Group" = "Protein.Group",
+          "Gene.Names" = "Genes", "Genes" = "Genes",
+          "Protein.Names" = "Protein.Names",
+          "Modified.Sequence" = "Modified.Sequence",
+          "Sequence" = "Stripped.Sequence", "Stripped.Sequence" = "Stripped.Sequence"
+        )
+        for (old_name in names(col_map)) {
+          if (old_name %in% names(site_info) && old_name != col_map[[old_name]]) {
+            names(site_info)[names(site_info) == old_name] <- col_map[[old_name]]
+          }
+        }
+
+        # Build SiteIDs from Residue + Site columns (DIA-NN format) or parse from sequences
+        if (all(c("Residue", "Site") %in% names(site_info))) {
+          protein_col <- if ("Protein.Group" %in% names(site_info)) site_info$Protein.Group else "Unknown"
+          site_info$Position <- site_info$Site
+          site_info$SiteID <- paste0(protein_col, "_", site_info$Residue, site_info$Site)
+        } else if ("Modified.Sequence" %in% names(site_info)) {
           parsed <- parse_phospho_positions(site_info$Modified.Sequence)
           site_info$Residue <- parsed$residue
           site_info$Position <- parsed$position
