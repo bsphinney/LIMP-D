@@ -235,6 +235,13 @@ server_data <- function(input, output, session, values, add_to_log, is_hf_space)
     fnames <- sub("\\.(d|raw|mzML|parquet)$", "", fnames, ignore.case = TRUE)
     fnames <- sub("^\\d{6,10}_", "", fnames)
 
+    # --- Special case: example data (filenames don't distinguish groups) ---
+    if (isTRUE(values$is_example_data) && n == 6) {
+      meta$Group <- c(rep("Affinisep", 3), rep("Evosep", 3))
+      values$metadata <- meta
+      return()
+    }
+
     # --- Strategy 1: Try known keywords first ---
     keywords <- c("affinisepACN", "affinisepIPA", "Control", "Treatment",
                    "Evosep", "Affinisep", "EGF", "untreat", "untreated",
