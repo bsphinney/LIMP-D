@@ -237,57 +237,62 @@ build_ui <- function(is_hf_space, hpc_mode = FALSE, local_sbatch = FALSE) {
 
             hr(),
             tags$h6(icon("dna"), " FASTA Database"),
-            navset_card_tab(
-              id = "fasta_source_tabs",
+            selectInput("fasta_source", NULL,
+              choices = c("Download from UniProt" = "uniprot",
+                          "Pre-staged on server" = "prestaged",
+                          "Browse / enter path" = "browse"),
+              width = "100%"),
 
-              nav_panel("UniProt", icon = icon("globe"),
-                div(style = "display: flex; gap: 8px; margin-bottom: 10px;",
+            # --- UniProt source ---
+            conditionalPanel("input.fasta_source == 'uniprot'",
+              div(style = "display: flex; gap: 5px; margin-bottom: 8px;",
+                div(style = "flex: 1;",
+                  textInput("uniprot_search_query", NULL,
+                    placeholder = "e.g., human, mouse, E. coli")
+                ),
+                actionButton("search_uniprot", "Search",
+                  class = "btn-info btn-sm", style = "margin-top: 0;")
+              ),
+              DTOutput("uniprot_results_table", height = "150px"),
+              selectInput("fasta_content_type", "Content:",
+                choices = c(
+                  "One per gene (recommended)" = "one_per_gene",
+                  "Swiss-Prot reviewed" = "reviewed",
+                  "Full proteome" = "full",
+                  "Full + isoforms" = "full_isoforms"
+                ), selected = "one_per_gene", width = "100%"
+              ),
+              checkboxInput("append_contaminants", "Append contaminants", TRUE),
+              uiOutput("fasta_filename_preview"),
+              actionButton("download_fasta_btn", "Download FASTA",
+                class = "btn-success btn-sm w-100", icon = icon("download"))
+            ),
+
+            # --- Pre-staged source ---
+            conditionalPanel("input.fasta_source == 'prestaged'",
+              selectInput("prestaged_fasta", "Available Databases:",
+                choices = NULL, width = "100%"),
+              uiOutput("prestaged_fasta_info")
+            ),
+
+            # --- Browse / path source ---
+            conditionalPanel("input.fasta_source == 'browse'",
+              conditionalPanel("input.search_connection_mode != 'ssh'",
+                shinyFiles::shinyDirButton("fasta_browse_dir", "Browse for FASTA Folder",
+                  title = "Navigate to FASTA directory",
+                  class = "btn-outline-primary btn-sm w-100")
+              ),
+              conditionalPanel("input.search_connection_mode == 'ssh'",
+                div(style = "display: flex; gap: 5px;",
                   div(style = "flex: 1;",
-                    textInput("uniprot_search_query", NULL,
-                      placeholder = "e.g., human, mouse, E. coli")
+                    textInput("ssh_fasta_browse_dir", NULL,
+                      placeholder = "/share/proteomics/fasta/")
                   ),
-                  actionButton("search_uniprot", "Search",
-                    class = "btn-info btn-sm", style = "margin-top: 0;")
-                ),
-                DTOutput("uniprot_results_table", height = "180px"),
-                radioButtons("fasta_content_type", "Content:",
-                  choices = c(
-                    "One per gene (recommended)" = "one_per_gene",
-                    "Swiss-Prot reviewed" = "reviewed",
-                    "Full proteome" = "full",
-                    "Full + isoforms" = "full_isoforms"
-                  ), selected = "one_per_gene"
-                ),
-                checkboxInput("append_contaminants", "Append contaminants", TRUE),
-                uiOutput("fasta_filename_preview"),
-                actionButton("download_fasta_btn", "Download FASTA",
-                  class = "btn-success btn-sm w-100", icon = icon("download"))
+                  actionButton("ssh_scan_fasta_btn", "Scan", icon = icon("magnifying-glass"),
+                    class = "btn-outline-secondary btn-sm", style = "margin-top: 0;")
+                )
               ),
-
-              nav_panel("Pre-staged", icon = icon("database"),
-                selectInput("prestaged_fasta", "Available Databases:",
-                  choices = NULL, width = "100%"),
-                uiOutput("prestaged_fasta_info")
-              ),
-
-              nav_panel("Browse", icon = icon("folder-tree"),
-                conditionalPanel("input.search_connection_mode != 'ssh'",
-                  shinyFiles::shinyDirButton("fasta_browse_dir", "Browse for FASTA Folder",
-                    title = "Navigate to FASTA directory",
-                    class = "btn-outline-primary btn-sm w-100")
-                ),
-                conditionalPanel("input.search_connection_mode == 'ssh'",
-                  div(style = "display: flex; gap: 5px;",
-                    div(style = "flex: 1;",
-                      textInput("ssh_fasta_browse_dir", NULL,
-                        placeholder = "/share/proteomics/fasta/")
-                    ),
-                    actionButton("ssh_scan_fasta_btn", "Scan", icon = icon("magnifying-glass"),
-                      class = "btn-outline-secondary btn-sm", style = "margin-top: 0;")
-                  )
-                ),
-                uiOutput("browsed_fasta_info")
-              )
+              uiOutput("browsed_fasta_info")
             ),
 
             hr(),
