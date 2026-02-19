@@ -281,6 +281,32 @@ The phosphoproteomics module provides site-level analysis of phosphorylation dat
 - **Protein-level abundance correction**: Subtracts protein-level logFC from phosphosite logFC to isolate changes in phosphorylation stoichiometry (requires matched total proteome and phospho-enriched samples)
 - **AI context**: Phosphosite DE results and kinase activities are included in the Gemini chat context when phospho analysis is active
 
+#### References & Methods
+The phosphoproteomics module is grounded in the following literature:
+
+**Core Data Processing:**
+- **DIA-NN site-level reporting**: DIA-NN 1.9+ natively produces site quantification matrices with localization confidence scores. [github.com/vdemichev/DiaNN](https://github.com/vdemichev/DiaNN)
+- Pham TV, Henneman AA, Truong NX, Jimenez CR (2024). "msproteomics sitereport: reporting DIA-MS phosphoproteomics experiments at site level with ease." *Bioinformatics* 40(7):btae432. [doi:10.1093/bioinformatics/btae432](https://doi.org/10.1093/bioinformatics/btae432)
+- Bekker-Jensen DB et al. (2020). "Rapid and site-specific deep phosphoproteome profiling by data-independent acquisition without the need for spectral libraries." *Nat Commun* 11:787. [doi:10.1038/s41467-020-14609-1](https://doi.org/10.1038/s41467-020-14609-1)
+- Muneer A et al. (2025). "Advancements in Global Phosphoproteomics Profiling: Overcoming Challenges in Sensitivity and Quantification." *PROTEOMICS* 2400087. [doi:10.1002/pmic.202400087](https://doi.org/10.1002/pmic.202400087)
+
+**Kinase Activity Inference:**
+- Wiredja DD, Koyutürk M, Chance MR (2017). "The KSEA App: a web-based tool for kinase activity inference from quantitative phosphoproteomics." *Bioinformatics* 33(21):3489–3491. [doi:10.1093/bioinformatics/btx687](https://doi.org/10.1093/bioinformatics/btx687)
+- Piersma SR et al. (2024). "Inferring kinase activity from phosphoproteomic data: Tool comparison and recent applications." *Mass Spectrometry Reviews* 43:552–571. [doi:10.1002/mas.21808](https://doi.org/10.1002/mas.21808)
+- Kim HJ et al. (2021). "PhosR enables processing and functional analysis of phosphoproteomic data." *Cell Reports* 34(8):108771. [doi:10.1016/j.celrep.2021.108771](https://doi.org/10.1016/j.celrep.2021.108771)
+
+**Motif & Sequence Visualization:**
+- Wagih O (2017). "ggseqlogo: a versatile R package for drawing sequence logos." *Bioinformatics* 33(22):3645–3647. [doi:10.1093/bioinformatics/btx469](https://doi.org/10.1093/bioinformatics/btx469)
+
+**DIA Phosphoproteomics Workflows:**
+- Skowronek P et al. (2022). "Rapid and In-Depth Coverage of the (Phospho-)Proteome With Deep Libraries and Optimal Window Design for dia-PASEF." *MCP* 21(9):100277.
+- Kitata RB et al. (2021). "DIA-based global phosphoproteomics system using hybrid spectral libraries." *Nat Commun* 12:2539. [doi:10.1038/s41467-021-22759-z](https://doi.org/10.1038/s41467-021-22759-z)
+- Roßmann K et al. (2024). "Data-Independent Acquisition: A Milestone and Prospect in Clinical Mass Spectrometry–Based Proteomics." *MCP* 23(7):100800. [doi:10.1016/S1535-9476(24)00090-2](https://doi.org/10.1016/S1535-9476(24)00090-2)
+
+**Normalization:**
+- Protein-level abundance correction isolates phosphorylation stoichiometry from total protein changes (Piersma 2024; PhosR documentation).
+- Tail-based imputation follows the Perseus-style approach: downshifted normal distribution (mean − 1.8 SD, width 0.3 SD) for missing values assumed to be below detection limit (Tyanova et al. 2016).
+
 ### 🎓 Education & Resources
 Click the **"Education"** tab to access embedded proteomics training materials without leaving the app.
 * **UC Davis Proteomics Videos:** Latest YouTube content auto-updates dynamically
