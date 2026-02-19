@@ -21,10 +21,13 @@ RUN apt-get update && apt-get install -y \
 # 2. Install R Dependencies (CRAN)
 RUN R -e "install.packages(c('bslib', 'readr', 'tibble', 'dplyr', 'tidyr', 'ggplot2', 'httr2', 'rhandsontable', 'DT', 'arrow', 'shinyjs', 'plotly', 'stringr', 'ggrepel', 'remotes', 'BiocManager', 'markdown'), repos='https://cloud.r-project.org/')"
 
-# 2b. Install graphics/font dependencies for clusterProfiler/enrichplot
+# 2b. Install phosphoproteomics packages (KSEA kinase activity, sequence logos)
+RUN R -e "install.packages(c('KSEAapp', 'ggseqlogo'), repos='https://cloud.r-project.org/')"
+
+# 2c. Install graphics/font dependencies for clusterProfiler/enrichplot
 RUN R -e "install.packages(c('systemfonts', 'gdtools', 'Rcpp'), repos='https://cloud.r-project.org/')"
 
-# 2c. Install network visualization dependencies for enrichplot
+# 2d. Install network visualization dependencies for enrichplot
 RUN R -e "install.packages(c('ggraph', 'graphlayouts', 'tidygraph', 'scatterpie', 'shadowtext', 'ggforce'), repos='https://cloud.r-project.org/')"
 
 # 3. Install Bioconductor Packages (Specific versions for stability)
@@ -35,8 +38,8 @@ RUN R -e "BiocManager::install(c('ggtree', 'ggtangle'), ask=FALSE, update=FALSE)
 RUN R -e "BiocManager::install(c('clusterProfiler', 'enrichplot'), ask=FALSE, update=FALSE)"
 
 # 4. Copy the App Files into the image
-# Copy app.R (Hugging Face standard naming)
 COPY app.R /srv/shiny-server/app.R
+COPY R/ /srv/shiny-server/R/
 
 # (Optional: If you have your logo file locally, uncomment the next line)
 # COPY funny_scientist.png /srv/shiny-server/funny_scientist.png
@@ -45,4 +48,4 @@ COPY app.R /srv/shiny-server/app.R
 EXPOSE 3838
 
 # 6. Run the App
-CMD ["R", "-e", "shiny::runApp('/srv/shiny-server/app.R', host = '0.0.0.0', port = 7860)"]
+CMD ["R", "-e", "shiny::runApp('/srv/shiny-server/', host = '0.0.0.0', port = 7860)"]

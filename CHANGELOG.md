@@ -5,6 +5,98 @@ All notable changes to DE-LIMP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-02-18
+
+### Added
+- **GSEA Expansion — Multi-Database Enrichment**:
+  - **Four enrichment databases**: GO Biological Process (BP), GO Molecular Function (MF), GO Cellular Component (CC), and KEGG Pathways
+  - **Ontology selector**: Dropdown to switch between BP/MF/CC/KEGG on the GSEA tab
+  - **Per-ontology caching**: Results cached per database; switching back loads instantly without re-computation
+  - **Contrast indicator**: Shows active contrast with stale-results warning when contrast changes
+  - **UniProt API organism detection**: Queries `rest.uniprot.org` to determine organism from accession when no suffix is present — works automatically for human, mouse, rat, and 9 other species
+  - **Robust ID mapping**: Handles multiple protein ID formats (pipe-separated, isoform suffixes, organism suffixes); fallback from UNIPROT to SYMBOL ID types
+  - **KEGG organism mapping**: Supports 11 species with automatic organism code detection
+  - **Dynamic plot titles**: All GSEA plots show which database was used
+  - Updated info modals with all 4 database descriptions
+  - Session save/load for GSEA cache, last contrast, and organism DB
+
+- **AI Summary — All Comparisons Analysis**:
+  - AI Summary now analyzes **all contrasts** simultaneously, not just the selected one
+  - Cross-comparison biomarker detection: identifies proteins significant in ≥2 comparisons
+  - Enhanced prompt with 5 structured sections: Overview, Key Findings Per Comparison, Cross-Comparison Biomarkers, High-Confidence Biomarker Insights, Biological Interpretation
+  - Adaptive token budget: top 30/20/10 proteins per contrast (scales with number of contrasts)
+  - `?` info modal explaining what data is/isn't sent to Gemini API
+
+- **MDS Plot Coloring**:
+  - Color MDS plot by Group, Batch, Covariate1, or Covariate2
+  - Colorblind-friendly Okabe-Ito palette
+  - Dynamic dropdown updates when metadata changes
+
+- **Complete Dataset Export**:
+  - Download button on Dataset Summary tab
+  - Exports: protein IDs, gene symbols, DE stats for ALL contrasts (suffixed columns), per-sample expression values, metadata as header comment rows
+
+- **Phosphoproteomics Phase 2 — Kinase Activity & Motif Analysis**:
+  - **KSEA kinase-substrate enrichment analysis**: Infers upstream kinase activity from phosphosite fold-changes using `KSEAapp` CRAN package with PhosphoSitePlus + NetworKIN database
+  - **KSEA bar plot**: Horizontal bar chart of kinase z-scores (top 15 activated + top 15 inhibited), colored by direction, with substrate count annotations
+  - **KSEA results table**: Filterable, sortable DT datatable with kinase gene, z-score, FDR, substrate count. Downloadable as CSV.
+  - **Sequence logo motif analysis**: Displays amino acid enrichment around regulated phosphosites using `ggseqlogo`. Separate logos for up-regulated and down-regulated sites.
+  - **FASTA upload**: Sidebar file input for protein FASTA. Parses UniProt-format headers to extract accessions. Enables accurate flanking sequence extraction for motif analysis.
+  - New "Kinase Activity" and "Motif Analysis" tabs in phospho results navset
+  - New packages: `KSEAapp` (CRAN), `ggseqlogo` (CRAN)
+
+- **Phosphoproteomics Phase 3 — Advanced Features**:
+  - **Protein-level abundance correction**: Checkbox to subtract protein-level logFC from phosphosite logFC, isolating phosphorylation stoichiometry changes
+  - **AI context integration**: Phosphosite DE results and KSEA kinase activities appended to Data Chat context when phospho analysis is active
+  - **Session persistence**: KSEA results, FASTA sequences, and all Phase 2/3 state saved/loaded with sessions
+
+### Changed
+- `R/server_gsea.R`: Rewritten from 144 to ~400 lines (multi-DB, caching, organism detection)
+- `R/server_ai.R`: AI Summary rewritten for all-contrast analysis; send_chat scaled for large datasets
+- `R/helpers_phospho.R`: Extended from 210 to ~380 lines (5 new helper functions)
+- `R/server_phospho.R`: Extended from 650 to ~950 lines (KSEA, motifs, protein correction)
+- `Dockerfile`: Added `KSEAapp` and `ggseqlogo` CRAN package installation
+- App version bumped to v2.5
+
+### Fixed
+- **Export CSV crash**: "Column name `Protein.Group` must not be duplicated" when limpa's topTable includes Protein.Group column
+- **Gemini token limit**: Scale data sent to AI based on sample count; group-level Mean/SD for >100 samples
+- **P-value histogram y-axis**: Cap y-axis to show distribution shape when first bin dominates; annotate clipped bin count
+- **P-value dropdown clipping**: Removed card_body wrapper and added z-index stacking to prevent plot from overlapping dropdown
+- **Comparison dropdown width**: Full-width dropdowns on all comparison banners; buttons moved inline
+
+### Planned — Future
+- PhosR integration (RUVphospho normalization, kinase profiling, signalome)
+- FASTA-based protein-relative position mapping for Path B sites
+
+## [2.4.0] - 2026-02-17
+
+### Added
+- **Phosphoproteomics Tab (Phase 1)**: Site-level differential phosphorylation analysis
+  - **Auto-detection**: Scans `Modified.Sequence` for `UniMod:21` on file upload; shows blue banner in Data Overview with "Open Phospho Tab" button
+  - **Two input paths**:
+    - Path A (recommended): Upload DIA-NN 1.9+ `site_matrix_0.9.parquet` or `site_matrix_0.99.parquet`
+    - Path B: Parse phosphosites directly from `report.parquet` with configurable localization confidence threshold (0.5–1.0)
+  - **Site extraction algorithm** (Path B): Character-by-character Modified.Sequence parser to locate `(UniMod:21)` positions, expand multiply-phosphorylated peptides, aggregate per SiteID × Run via max intensity ("Top 1" method)
+  - **Site-level limma DE**: Filter sites (≥2 non-NA per group), tail-based imputation (Perseus-style: mean − 1.8 SD, width 0.3 SD), optional normalization (none/median/quantile), standard limma pipeline
+  - **Phospho Volcano**: ggplot2 volcano with ggrepel labels formatted as "Gene Residue+Position" (e.g., "MAPK1 T185"). Colors: Significant=#E63946, FDR-only=#457B9D, NS=gray70. Downloadable as PDF.
+  - **Site Table**: DT datatable with SiteID, Gene, Residue, Position, logFC, adj.P.Val, localization confidence. Filterable, sortable, downloadable as CSV.
+  - **Residue Distribution**: Grouped bar chart (S/T/Y) comparing "All quantified" vs "Significant". Subtitle with expected ~85% Ser / ~14% Thr / ~1% Tyr.
+  - **QC: Completeness**: Histogram of per-site % samples quantified with red dashed line at 50% threshold.
+  - **Sidebar controls**: Conditional on phospho detection — input mode, localization slider, normalization radio, "Run Phosphosite Analysis" button
+  - **Normalization warning**: Yellow alert for phospho-enriched data explaining DIA-NN normalization assumptions
+  - **Educational expandable**: Explains site-level vs protein-level analysis, localization confidence, imputation approach
+  - **Session save/load**: All phospho state persisted and restored
+  - **Reproducibility logging**: Pipeline steps logged with parameters
+- New files: `R/helpers_phospho.R` (210 lines), `R/server_phospho.R` (650 lines)
+
+## [2.3.0] - 2026-02-17
+
+### Changed
+- **Modularization**: Split 5,139-line monolith into `app.R` orchestrator + 12 `R/` module files
+- **Upload limit**: Increased from 500 MB to 5 GB
+- **Dockerfile**: Updated for directory-based `runApp()` and `COPY R/` directive
+
 ## [2.2.0] - 2026-02-17
 
 ### Added

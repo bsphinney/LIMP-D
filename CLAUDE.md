@@ -22,11 +22,23 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 
 | File | Purpose |
 |------|---------|
-| `app.R` | Main Shiny app (~4900 lines) - used by HF Spaces. **Must be identical to DE-LIMP.R** |
-| `DE-LIMP.R` | Identical copy of app.R - for GitHub releases/local users |
+| `app.R` | Thin orchestrator (~230 lines) — package loading, reactive values init, calls R/ modules |
+| `R/ui.R` | `build_ui(is_hf_space)` — full UI definition (~700 lines) |
+| `R/server_data.R` | Data upload, example load, group assignment, pipeline execution (~576 lines) |
+| `R/server_de.R` | Volcano, DE table, heatmap, consistent DE, selection sync (~498 lines) |
+| `R/server_qc.R` | QC trends, diagnostic plots, p-value distribution (~828 lines) |
+| `R/server_viz.R` | Expression grid, signal distribution, AI summary (~381 lines) |
+| `R/server_gsea.R` | GSEA analysis, multi-DB (BP/MF/CC/KEGG), organism detection, caching (~400 lines) |
+| `R/server_ai.R` | AI Summary (all contrasts), Data Chat, Gemini integration (~280 lines) |
+| `R/server_xic.R` | XIC viewer, mobilogram, alignment (~861 lines) |
+| `R/server_session.R` | Info modals, save/load session, reproducibility, methodology (~533 lines) |
+| `R/helpers.R` | `get_diann_stats_r()`, `cal_z_score()`, `detect_organism_db()` |
+| `R/helpers_ai.R` | `list_google_models()`, `upload_csv_to_gemini()`, `ask_gemini_*()` |
+| `R/helpers_xic.R` | `detect_xic_format()`, `load_xic_for_protein()`, `reshape_xic_for_plotting()` |
+| `R/helpers_phospho.R` | `detect_phospho()`, `parse_phospho_positions()`, `extract_phosphosites()` (~210 lines) |
+| `R/server_phospho.R` | Phospho site-level DE, volcano, site table, residue dist, completeness QC (~650 lines) |
+| `DE-LIMP.R` | Legacy single-file copy (pre-modularization, for backwards compat) |
 | `Dockerfile` | Docker container for HF Spaces and HPC deployment |
-| `UI_LAYOUT_SPEC.md` | Spec for v2.1 responsive UI layout refactoring |
-| `NORMALIZATION_DIAGNOSTIC_SPEC.md` | Spec for normalization diagnostic plot feature |
 | `HPC_DEPLOYMENT.md` | Guide for HPC cluster deployment with Apptainer/Singularity |
 | `USER_GUIDE.md` | End-user documentation |
 | `README_GITHUB.md` | **SOURCE** for GitHub README (edit this!) |
@@ -38,24 +50,41 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 
 ## App Architecture
 
-### Structure (app.R, ~4900 lines)
+### Structure (modular, ~6,100 lines total)
 ```
-Lines 1-110:     Auto-installation & setup (R/Bioc version checks, package install)
-Lines 111-170:   Server configuration (max upload size, HF detection, Gemini API)
-Lines 170-330:   Helper functions (QC stats, AI chat, organism detection, XIC helpers)
-Lines 331-900:   UI definition (page_sidebar with 9 main tabs, 15 info modal buttons)
-Lines 900-4900:  Server logic (~80+ reactive elements, XIC viewer, info modal observers)
-Line ~4900:      shinyApp(ui, server)
+app.R (250 lines):      Package loading, auto-install, reactive values, module calls
+R/ui.R:                 build_ui() — CSS/JS, sidebar, all 10 tab nav_panels
+R/server_*.R (9 files): Server modules, each receives (input, output, session, values, ...)
+R/helpers*.R (4 files): Pure utility functions (no Shiny reactivity)
+```
+
+### Module calling pattern (app.R server function)
+```r
+server <- function(input, output, session) {
+  values <- reactiveValues(...)
+  add_to_log <- function(action_name, code_lines) { ... }
+
+  server_data(input, output, session, values, add_to_log, is_hf_space)
+  server_de(input, output, session, values, add_to_log)
+  server_qc(input, output, session, values)
+  server_viz(input, output, session, values, add_to_log, is_hf_space)
+  server_gsea(input, output, session, values, add_to_log)
+  server_ai(input, output, session, values)
+  server_xic(input, output, session, values, is_hf_space)
+  server_phospho(input, output, session, values, add_to_log)
+  server_session(input, output, session, values, add_to_log)
+}
 ```
 
 ### Main Tab Structure
-- **Data Overview** - 6 sub-tabs: **Assign Groups & Run**, Signal Distribution, Dataset Summary, Group QC Summary, Expression Grid, **AI Summary**
+- **Data Overview** - 6 sub-tabs: **Assign Groups & Run** (+ phospho detection banner), Signal Distribution, Dataset Summary, Group QC Summary, Expression Grid, **AI Summary**
 - **QC Trends** - 4 sub-tabs: Precursors, Proteins, MS1 Signal, Stats Table
 - **QC Plots** - 5 sub-tabs: Normalization Diagnostic, DPC Fit, MDS Plot, Group Distribution, P-value Distribution
 - **DE Dashboard** - Volcano plot, results table, violin plots, interactive comparison selector
 - **Consistent DE** - 2 sub-tabs: High-Consistency Table (ranked by %CV), CV Distribution (histogram by group)
 - **Reproducibility** - Code Log + Methodology sub-tabs
-- **Gene Set Enrichment** - Dot Plot, Enrichment Map, Ridgeplot, Results Table
+- **Phosphoproteomics** - Site-level DE: Phospho Volcano, Site Table, Residue Distribution, QC Completeness (conditional on phospho detection)
+- **Gene Set Enrichment** - Ontology selector (BP/MF/CC/KEGG), Dot Plot, Enrichment Map, Ridgeplot, Results Table, per-ontology caching
 - **Data Chat** - AI-powered analysis (Google Gemini API)
 - **Education** - Learning resources
 
@@ -74,6 +103,15 @@ Line ~4900:      shinyApp(ui, server)
 - `values$original_report_name` - Original filename of uploaded report (for XIC path derivation)
 - `values$mobilogram_available` - Whether mobilogram files with non-zero IM data exist
 - `values$mobilogram_files_found` - Count of mobilogram files detected (may have zero data)
+- `values$phospho_detected` - list(detected, n_phospho, n_total, pct_phospho, is_enriched)
+- `values$phospho_site_matrix` - numeric matrix: sites x samples (log2)
+- `values$phospho_site_info` - data.frame: SiteID, Protein.Group, Genes, Residue, Position
+- `values$phospho_fit` - limma MArrayLM object for site-level DE
+- `values$phospho_site_matrix_filtered` - after missingness filtering + imputation
+- `values$phospho_input_mode` - "site_matrix" or "parsed_report"
+- `values$gsea_results_cache` - Named list of cached GSEA results per ontology (BP=res, MF=res, etc.)
+- `values$gsea_last_contrast` - Contrast used for cached GSEA results
+- `values$gsea_last_org_db` - OrgDb used for cached GSEA results
 
 ### LIMPA Pipeline Flow
 1. `readDIANN()` - Load DIA-NN parquet file
@@ -107,25 +145,27 @@ Line ~4900:      shinyApp(ui, server)
 
 ### Running Locally
 ```r
-# In VS Code R terminal (recommended):
-shiny::runApp('/Users/brettphinney/Documents/claude/DE-LIMP.r', port=3838, launch.browser=TRUE)
+# In VS Code R terminal (recommended) — directory-based:
+shiny::runApp('/Users/brettphinney/Documents/claude/', port=3838, launch.browser=TRUE)
 
 # From command line:
-Rscript -e "shiny::runApp('/Users/brettphinney/Documents/claude/DE-LIMP.r', port=3838)" &
+Rscript -e "shiny::runApp('/Users/brettphinney/Documents/claude/', port=3838)" &
 ```
 
 - **DO NOT** use `source()` - it doesn't work properly in VS Code
+- `app.R` explicitly sources all `R/*.R` files, so it works with both `runApp('.')` and `runApp('app.R')`
 - Shiny apps don't hot-reload - must restart after every code change
-- Stop: `pkill -f "DE-LIMP.r"` or `Ctrl+C`
+- **Upload limit**: 5 GB (`options(shiny.maxRequestSize)` in app.R line 145)
+- Stop: `pkill -f "shiny::runApp"` or `Ctrl+C`
 - Check if running: `lsof -i :3838`
 
-### Keeping app.R and DE-LIMP.R in Sync
-These files must be identical. After editing one: `cp DE-LIMP.R app.R` (or vice versa).
+### DE-LIMP.R (Legacy)
+`DE-LIMP.R` is the old single-file monolith kept for backwards compatibility. The active app is now directory-based (`app.R` + `R/` directory). Do NOT edit `DE-LIMP.R` — it will be removed in a future release.
 
 ## Deployment
 
 ### Three Platforms
-1. **GitHub** (`origin` remote) - Source code, releases, download DE-LIMP.R
+1. **GitHub** (`origin` remote) - Source code, releases
 2. **Hugging Face Spaces** (`hf` remote) - Web app via Docker (app.R)
 3. **HPC Clusters** - Apptainer/Singularity containers (see HPC_DEPLOYMENT.md)
 
@@ -138,9 +178,9 @@ Pushing to `origin/main` automatically syncs to HF within 1-2 minutes.
 
 ```bash
 # Standard workflow for code changes:
-git add DE-LIMP.R app.R  # be specific with files
+git add app.R R/           # add orchestrator + modules
 git commit -m "Description"
-git push origin main      # HF syncs automatically
+git push origin main       # HF syncs automatically
 ```
 
 ### README Management (CRITICAL)
@@ -163,10 +203,10 @@ rm README_GITHUB_BACKUP.md
 
 ### Adding New R Packages
 When adding features that require new packages:
-1. Add `library()` call to app.R/DE-LIMP.R
+1. Add `library()` call to app.R
 2. Update Dockerfile to install the package (CRAN in Section 2, Bioconductor in Section 3)
 3. Consider system dependencies: graphics packages need `libcairo2-dev`, XML/web need `libxml2-dev`
-4. Commit app.R, DE-LIMP.R, and Dockerfile together
+4. Commit app.R, R/ modules, and Dockerfile together
 
 ### Minimize HF Builds
 HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Always test locally first, batch changes, and push only when fully tested.
@@ -204,6 +244,24 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 - **Plotly annotations**: Use `layout(annotations = list(...))` with paper coordinates (`xref = "paper"`) for absolute positioning. Don't use ggplot `annotate()` — it renders unreliably in plotly conversion.
 - **In-plot legends**: Use `legend("bottomright", bg = "white", box.col = "gray80")` inside the plot area. Never use negative `inset` values — they push legends off-screen.
 
+### Phosphoproteomics Patterns
+- **Auto-detection**: `detect_phospho()` scans `Modified.Sequence` for `UniMod:21` on file upload; threshold >100 phosphoprecursors
+- **Two input paths**: Path A = DIA-NN 1.9+ `site_matrix_*.parquet` upload (recommended); Path B = parse from `report.parquet` via `extract_phosphosites()`
+- **Site extraction (Path B)**: Walk `Modified.Sequence` character-by-character to find `(UniMod:21)`, record preceding residue + position. Aggregate per SiteID x Run via max intensity ("Top 1" method).
+- **Imputation**: Tail-based / Perseus-style: `rnorm(n, mean = global_mean - 1.8 * global_sd, sd = 0.3 * global_sd)`. `set.seed(42)` for reproducibility.
+- **Normalization options**: none (default), median centering, quantile normalization
+- **Independent from protein-level**: Phospho pipeline uses its own `phospho_fit` object, separate from `values$fit`. Both can coexist.
+- **Conditional UI**: Sidebar controls and tab content use `conditionalPanel(condition = "output.phospho_detected_flag")` with `outputOptions(suspendWhenHidden = FALSE)`
+- **Site positions are peptide-relative** in Path B (no FASTA mapping). Labeled as such in the table.
+- **Spec documents**: `PHOSPHO_TAB_SPEC.md` (full 3-phase spec with citations), `PHOSPHO_TAB_PHASE1_COMPACT.md` (Phase 1 implementation guide)
+
+### GSEA & Organism Detection
+- **Organism detection priority**: 1) Suffix-based (`_HUMAN`, `_MOUSE` in Protein.Group), 2) UniProt REST API lookup (`rest.uniprot.org/uniprotkb/{accession}` → taxonomy ID), 3) Default to human
+- **ID mapping fallback**: Try UNIPROT → ENTREZID first, then SYMBOL → ENTREZID
+- **ID format handling**: Strips pipe format (`sp|ACC|NAME`), isoform suffixes (`-2`), organism suffixes (`_HUMAN`)
+- **Per-ontology caching**: `values$gsea_results_cache` is a named list keyed by ontology (BP/MF/CC/KEGG)
+- **Taxonomy mapping**: 12 species mapped from NCBI taxonomy ID to Bioconductor OrgDb name
+
 ### XIC Viewer Patterns
 - **Arrow masks dplyr**: `arrow::select()` masks `dplyr::select()` — always use `dplyr::select()` explicitly in XIC code
 - **Avoid rlang in Arrow context**: `rlang::sym()` and tidy `rename()` fail with Arrow — use base R `df[df$col %in% vals, ]` and `names(df)[...] <- "new"`
@@ -232,9 +290,10 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 
 ## Version History
 
-Current version: **v2.2.0** (2026-02-17). See [CHANGELOG.md](CHANGELOG.md) for detailed release history.
+Current version: **v2.5.0** (2026-02-18). See [CHANGELOG.md](CHANGELOG.md) for detailed release history.
 
 ### Key Architecture Decisions (for context)
+- **Modularization** (v2.3): Split 5,139-line monolith into `app.R` orchestrator + 12 `R/` module files. Each server module receives `(input, output, session, values, ...)`. `app.R` explicitly sources `R/` for compatibility with both `runApp('.')` and `runApp('app.R')`.
 - **Volcano → Table filtering** (v2.2): `output$de_table` filters by `values$plot_selected_proteins`. Row selection observer uses `isolate()` to index into filtered data. `req(length > 0)` prevents reactive loop when selection resets to NULL.
 - **Contextual Help** (v2.2): 15 info modal `?` buttons across all major tabs. See "Info modal pattern" in Key Patterns above.
 - **XIC Viewer** (v2.1): Fragment-level chromatogram inspection with 3 display modes (facet by sample, facet by fragment, intensity alignment). Supports DIA-NN v1/v2 formats and ion mobility. Local/HPC only (hidden on HF).
@@ -242,9 +301,26 @@ Current version: **v2.2.0** (2026-02-17). See [CHANGELOG.md](CHANGELOG.md) for d
 - **Four-way selector sync** (v2.1): `contrast_selector`, `contrast_selector_signal`, `contrast_selector_grid`, `contrast_selector_pvalue` all sync bidirectionally.
 - **P-value Distribution Diagnostic** (v2.1): Automated health assessment with color-coded guidance banners (healthy/warning/danger/info patterns).
 - **Assign Groups** (v2.1): Moved from modal to permanent Data Overview sub-tab for better layout.
+- **Phosphoproteomics Phase 1** (v2.4): Site-level DE via limma with two input paths (site matrix upload or parsed from report). Auto-detection on file upload. Independent from protein-level pipeline. No new packages required.
+- **GSEA Expansion** (v2.5): Multi-database enrichment (BP/MF/CC/KEGG) with per-ontology caching. UniProt REST API organism detection when protein IDs lack species suffixes. Robust ID extraction handles pipe-separated, isoform, and organism suffix formats.
+- **AI Summary All-Contrasts** (v2.5): Loops over all `colnames(values$fit$contrasts)`, computes cross-comparison biomarkers (significant in >=2 contrasts), scales token budget by contrast count (30/20/10 top proteins).
 
 ## Current TODO
-- [ ] GSEA: Add KEGG/Reactome enrichment; clarify which contrast is used
+
+### Phosphoproteomics — Phase 2 (Kinase Activity & Motifs)
+- [ ] **KSEA integration** (`KSEAapp` CRAN package): Infer upstream kinase activity from phosphosite fold-changes using PhosphoSitePlus + NetworKIN database. Horizontal bar plot of kinase z-scores. New package: `KSEAapp`
+- [ ] **Sequence logo / Motif analysis** (`ggseqlogo` CRAN package): Extract ±7 flanking residues around significant phosphosites, display as sequence logos (up-regulated vs down-regulated). Requires FASTA upload for protein-relative positions. New package: `ggseqlogo`
+- [ ] **Kinase Activity tab** in phospho results navset: Run KSEA button, bar plot, results table
+- [ ] **Motif Analysis tab** in phospho results navset: Logos for up/down regulated sites
+- [ ] Dockerfile: Add `KSEAapp`, `ggseqlogo` to CRAN install list
+
+### Phosphoproteomics — Phase 3 (Advanced)
+- [ ] **Protein-level abundance correction**: Subtract protein logFC from phosphosite logFC to isolate phosphorylation stoichiometry changes (requires total proteome + phospho-enriched from same samples)
+- [ ] **PhosR integration** (Bioconductor): RUVphospho normalization using stably phosphorylated sites (SPSs), kinase-substrate scoring, signalome construction. New package: `PhosR`
+- [ ] **AI context for phospho**: Append phosphosite DE results and KSEA kinase activities to Gemini chat context when phospho analysis is active
+- [ ] **Phospho-specific FASTA upload**: Map peptide-relative positions to protein-relative positions for accurate site IDs and motif extraction
+
+### General
 - [ ] Grid View: Open violin plot on protein click with bar plot toggle
 - [ ] Publication-quality plot exports (SVG/PNG/TIFF with size controls)
 - [ ] Sample correlation heatmap (QC Plots tab)
