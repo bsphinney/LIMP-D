@@ -103,7 +103,10 @@ build_ui <- function(is_hf_space, hpc_mode = FALSE, local_sbatch = FALSE) {
     h5("1. Upload"),
     fileInput("report_file", "DIA-NN Report (.parquet)", accept = c(".parquet")),
     actionButton("load_example", "\U0001F4CA Load Example Data", class = "btn-info btn-sm w-100",
-                 style = "margin-bottom: 10px;"),
+                 style = "margin-bottom: 5px;"),
+    actionButton("load_example_phospho", "Load Example Phospho Data",
+      class = "btn-outline-info btn-sm w-100", icon = icon("flask"),
+      style = "margin-bottom: 10px;"),
     numericInput("q_cutoff", "Q-Value Cutoff", value = 0.01, min = 0, max = 0.1, step = 0.01),
     hr(),
     h5("2. Session"),
@@ -141,9 +144,6 @@ build_ui <- function(is_hf_space, hpc_mode = FALSE, local_sbatch = FALSE) {
           "Upload the site localization matrix from DIA-NN (TSV or parquet format)."
         )
       ),
-      actionButton("load_example_phospho", "Load Example Phospho Data",
-        class = "btn-outline-info btn-sm w-100", icon = icon("flask"),
-        style = "margin-bottom: 10px;"),
       conditionalPanel(
         condition = "input.phospho_input_mode == 'parsed_report'",
         sliderInput("phospho_loc_threshold", "Site Localization Confidence",
