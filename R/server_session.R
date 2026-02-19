@@ -287,6 +287,10 @@ server_session <- function(input, output, session, values, add_to_log) {
         ksea_last_contrast = values$ksea_last_contrast,
         phospho_fasta_sequences = values$phospho_fasta_sequences,
         phospho_annotations = values$phospho_annotations,
+        # DIA-NN Search state
+        diann_jobs = values$diann_jobs,
+        diann_fasta_files = values$diann_fasta_files,
+        fasta_info = values$fasta_info,
         # Save timestamp & version
         saved_at   = Sys.time(),
         app_version = "DE-LIMP v2.5"
@@ -351,6 +355,10 @@ server_session <- function(input, output, session, values, add_to_log) {
       values$ksea_last_contrast <- session_data$ksea_last_contrast
       values$phospho_fasta_sequences <- session_data$phospho_fasta_sequences
       values$phospho_annotations <- session_data$phospho_annotations
+      # DIA-NN Search state
+      values$diann_jobs <- session_data$diann_jobs %||% list()
+      values$diann_fasta_files <- session_data$diann_fasta_files %||% character()
+      values$fasta_info <- session_data$fasta_info
 
       # Restore repro log and append load event
       values$repro_log  <- session_data$repro_log %||% values$repro_log

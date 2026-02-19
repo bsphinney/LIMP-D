@@ -28,9 +28,12 @@ server_phospho <- function(input, output, session, values, add_to_log) {
       sprintf("Phosphopeptides detected (%s%% of precursors).", pd$pct_phospho)
     }
 
+    # Show different guidance depending on whether the pipeline has been run
+    pipeline_done <- !is.null(values$phospho_fit)
+
     tags$div(
-      class = "alert alert-info py-2 px-3 mb-3",
-      style = "border-left: 4px solid #0d6efd;",
+      class = if (pipeline_done) "alert alert-success py-2 px-3 mb-3" else "alert alert-info py-2 px-3 mb-3",
+      style = if (pipeline_done) "border-left: 4px solid #198754;" else "border-left: 4px solid #0d6efd;",
       tags$div(
         style = "display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;",
         tags$span(
@@ -40,9 +43,26 @@ server_phospho <- function(input, output, session, values, add_to_log) {
                   format(pd$n_phospho, big.mark = ","),
                   format(pd$n_total, big.mark = ","))
         ),
-        actionButton("go_to_phospho", "Open Phospho Tab \u2192",
-                      class = "btn btn-sm btn-outline-primary")
-      )
+        actionButton("go_to_phospho",
+                      if (pipeline_done) "View Phospho Results \u2192" else "Open Phospho Tab \u2192",
+                      class = if (pipeline_done) "btn btn-sm btn-success" else "btn btn-sm btn-outline-primary")
+      ),
+      if (pipeline_done) {
+        tags$div(
+          style = "margin-top: 8px; font-size: 0.85em;",
+          icon("check-circle"),
+          " Pipeline complete! Visit the ", tags$strong("Phosphoproteomics tab"),
+          " to explore site-level volcano plots, kinase activity (KSEA), ",
+          "motif analysis, and site annotations."
+        )
+      } else {
+        tags$div(
+          style = "margin-top: 8px; font-size: 0.85em; color: #6c757d;",
+          icon("info-circle"),
+          " Run the pipeline below, then visit the ", tags$strong("Phosphoproteomics tab"),
+          " for site-level differential expression, kinase activity inference, and motif analysis."
+        )
+      }
     )
   })
 
@@ -57,8 +77,15 @@ server_phospho <- function(input, output, session, values, add_to_log) {
   observeEvent(input$phospho_site_matrix_file, {
     req(input$phospho_site_matrix_file)
     tryCatch({
-      mat_df <- arrow::read_parquet(input$phospho_site_matrix_file$datapath,
-                                     as_data_frame = TRUE)
+      # Detect file format from original filename extension
+      orig_name <- tolower(input$phospho_site_matrix_file$name)
+      if (grepl("\\.(tsv|txt)$", orig_name)) {
+        mat_df <- utils::read.delim(input$phospho_site_matrix_file$datapath,
+                                     check.names = FALSE, stringsAsFactors = FALSE)
+      } else {
+        mat_df <- arrow::read_parquet(input$phospho_site_matrix_file$datapath,
+                                       as_data_frame = TRUE)
+      }
 
       # First column is SiteID / row index; rest are sample intensities
       site_ids <- mat_df[[1]]
@@ -334,7 +361,11 @@ server_phospho <- function(input, output, session, values, add_to_log) {
         id = "phospho_results_tabs",
 
         nav_panel("Phospho Volcano",
-          tags$div(style = "text-align: right; margin-bottom: 10px;",
+          tags$div(style = "display: flex; justify-content: flex-end; gap: 5px; margin-bottom: 10px;",
+            actionButton("phospho_volcano_info_btn", NULL, icon = icon("question-circle"),
+                         class = "btn-outline-info btn-sm", title = "About this plot"),
+            actionButton("phospho_volcano_fullscreen_btn", NULL, icon = icon("expand"),
+                         class = "btn-outline-secondary btn-sm", title = "Fullscreen"),
             downloadButton("download_phospho_volcano", "Save Plot",
                            class = "btn-outline-secondary btn-sm")
           ),
@@ -342,7 +373,9 @@ server_phospho <- function(input, output, session, values, add_to_log) {
         ),
 
         nav_panel("Site Table",
-          tags$div(style = "text-align: right; margin-bottom: 10px;",
+          tags$div(style = "display: flex; justify-content: flex-end; gap: 5px; margin-bottom: 10px;",
+            actionButton("phospho_table_info_btn", NULL, icon = icon("question-circle"),
+                         class = "btn-outline-info btn-sm", title = "About this table"),
             downloadButton("download_phospho_table", "Export CSV",
                            class = "btn-success btn-sm")
           ),
@@ -350,10 +383,22 @@ server_phospho <- function(input, output, session, values, add_to_log) {
         ),
 
         nav_panel("Residue Distribution",
+          tags$div(style = "display: flex; justify-content: flex-end; gap: 5px; margin-bottom: 10px;",
+            actionButton("phospho_residue_info_btn", NULL, icon = icon("question-circle"),
+                         class = "btn-outline-info btn-sm", title = "About this plot"),
+            actionButton("phospho_residue_fullscreen_btn", NULL, icon = icon("expand"),
+                         class = "btn-outline-secondary btn-sm", title = "Fullscreen")
+          ),
           plotOutput("phospho_residue_dist", height = "450px")
         ),
 
         nav_panel("QC: Completeness",
+          tags$div(style = "display: flex; justify-content: flex-end; gap: 5px; margin-bottom: 10px;",
+            actionButton("phospho_completeness_info_btn", NULL, icon = icon("question-circle"),
+                         class = "btn-outline-info btn-sm", title = "About this plot"),
+            actionButton("phospho_completeness_fullscreen_btn", NULL, icon = icon("expand"),
+                         class = "btn-outline-secondary btn-sm", title = "Fullscreen")
+          ),
           plotOutput("phospho_completeness", height = "450px")
         ),
 
@@ -362,13 +407,13 @@ server_phospho <- function(input, output, session, values, add_to_log) {
             style = "display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;",
             actionButton("run_ksea", "Run Kinase Enrichment (KSEA)",
                          class = "btn-info", icon = icon("project-diagram")),
-            tags$span(id = "ksea_status_text", class = "text-muted small")
-          ),
-          tags$p(class = "text-muted small",
-            "Infers upstream kinase activity from phosphosite fold-changes using the ",
-            "PhosphoSitePlus + NetworKIN kinase-substrate database. ",
-            "Requires the ", tags$code("KSEAapp"), " R package. ",
-            "Reference: Casado et al. 2013, Sci Signal 6:rs6; Wiredja et al. 2017."
+            tags$span(id = "ksea_status_text", class = "text-muted small"),
+            tags$div(style = "margin-left: auto; display: flex; gap: 5px;",
+              actionButton("ksea_info_btn", NULL, icon = icon("question-circle"),
+                           class = "btn-outline-info btn-sm", title = "About KSEA"),
+              actionButton("ksea_fullscreen_btn", NULL, icon = icon("expand"),
+                           class = "btn-outline-secondary btn-sm", title = "Fullscreen")
+            )
           ),
           hr(),
           plotOutput("ksea_barplot", height = "500px"),
@@ -381,17 +426,12 @@ server_phospho <- function(input, output, session, values, add_to_log) {
         ),
 
         nav_panel("Motif Analysis",
-          tags$p(class = "text-muted small",
-            "Sequence logos show the amino acid enrichment around regulated phosphosites. ",
-            "Distinct motifs suggest specific kinase families are active. For example, ",
-            "proline at +1 indicates proline-directed kinases (CDKs, MAPKs); ",
-            "acidic residues (D/E) at +1 to +3 suggest CK2. ",
-            "Requires FASTA upload (sidebar) and the ", tags$code("ggseqlogo"), " R package."
+          tags$div(style = "display: flex; justify-content: flex-end; gap: 5px; margin-bottom: 10px;",
+            actionButton("phospho_motif_info_btn", NULL, icon = icon("question-circle"),
+                         class = "btn-outline-info btn-sm", title = "About motif analysis"),
+            actionButton("phospho_motif_fullscreen_btn", NULL, icon = icon("expand"),
+                         class = "btn-outline-secondary btn-sm", title = "Fullscreen")
           ),
-          tags$p(class = "text-muted small",
-            "Reference: Wagih O (2017) ggseqlogo, Bioinformatics 33:3645-3647."
-          ),
-          hr(),
           plotOutput("phospho_motif_up", height = "220px"),
           plotOutput("phospho_motif_down", height = "220px")
         ),
@@ -403,6 +443,10 @@ server_phospho <- function(input, output, session, values, add_to_log) {
                          class = "btn-info", icon = icon("database")),
             tags$span(class = "text-muted small",
               "Queries UniProt & PhosphoSitePlus to annotate each site as Known or Novel."
+            ),
+            tags$div(style = "margin-left: auto;",
+              actionButton("site_annotation_info_btn", NULL, icon = icon("question-circle"),
+                           class = "btn-outline-info btn-sm", title = "About site annotation")
             )
           ),
           uiOutput("site_annotation_summary"),
@@ -786,9 +830,7 @@ server_phospho <- function(input, output, session, values, add_to_log) {
           ks_data,
           ksea_input,
           NetworKIN    = TRUE,
-          NetworKIN.cutoff = 5,
-          m.cutoff     = 2,
-          p.cutoff     = 0.05
+          NetworKIN.cutoff = 5
         )
         grDevices::dev.off()
 
@@ -808,7 +850,7 @@ server_phospho <- function(input, output, session, values, add_to_log) {
           sprintf("# Contrast: %s", input$phospho_contrast_selector),
           sprintf("# Input: %d phosphosites with gene annotations", nrow(ksea_input)),
           "data('KSData', package = 'KSEAapp')",
-          "ksea_scores <- KSEAapp::KSEA.Scores(KSData, ksea_input, NetworKIN=TRUE, NetworKIN.cutoff=5, m.cutoff=2)"
+          "ksea_scores <- KSEAapp::KSEA.Scores(KSData, ksea_input, NetworKIN=TRUE, NetworKIN.cutoff=5)"
         ))
       }, error = function(e) {
         try(grDevices::dev.off(), silent = TRUE)
@@ -1157,5 +1199,478 @@ server_phospho <- function(input, output, session, values, add_to_log) {
       write.csv(ann, file, row.names = FALSE)
     }
   )
+
+  # ============================================================================
+  #  Info Modal Popups (? buttons)
+  # ============================================================================
+
+  observeEvent(input$phospho_volcano_info_btn, {
+    showModal(modalDialog(
+      title = "Phosphosite Volcano Plot",
+      tags$p(
+        "The volcano plot displays differential phosphosite abundance between experimental ",
+        "conditions. Each point represents a single phosphorylation site. The x-axis shows ",
+        "log2 fold change and the y-axis shows -log10 adjusted p-value (BH-corrected)."
+      ),
+      tags$p(
+        tags$strong("Significance thresholds: "),
+        "Sites passing both |log2FC| > 1 (2-fold change) and FDR < 0.05 are colored red. ",
+        "Sites passing only FDR < 0.05 are colored blue. Top 15 significant sites are labeled."
+      ),
+      tags$p(
+        "When protein-level abundance correction is enabled, log2FC values reflect ",
+        "phosphorylation stoichiometry changes (site logFC minus protein logFC), ",
+        "isolating regulation from protein expression changes."
+      ),
+      tags$hr(),
+      tags$p(class = "text-muted small",
+        tags$strong("References:"), tags$br(),
+        "Ritchie ME et al. (2015) limma powers differential expression analyses for RNA-sequencing ",
+        "and microarray studies. ", tags$em("Nucleic Acids Res"), " 43(7):e47.", tags$br(),
+        "Demichev V et al. (2020) DIA-NN: neural networks and interference correction enable deep ",
+        "proteome coverage in high throughput. ", tags$em("Nature Methods"), " 17:41-44.", tags$br(),
+        "Benjamini Y & Hochberg Y (1995) Controlling the false discovery rate. ",
+        tags$em("J Royal Stat Soc B"), " 57:289-300."
+      ),
+      easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  observeEvent(input$phospho_table_info_btn, {
+    showModal(modalDialog(
+      title = "Phosphosite Results Table",
+      tags$p(
+        "This table contains site-level differential expression statistics for every ",
+        "quantified phosphorylation site. Each row represents a unique phosphosite ",
+        "(Protein + Residue + Position)."
+      ),
+      tags$p(tags$strong("Key columns:")),
+      tags$ul(
+        tags$li(tags$strong("logFC"), " \u2014 log2 fold change between conditions"),
+        tags$li(tags$strong("adj.P.Val"), " \u2014 Benjamini-Hochberg adjusted p-value (FDR)"),
+        tags$li(tags$strong("Residue"), " \u2014 phosphorylated amino acid (S, T, or Y)"),
+        tags$li(tags$strong("Position"), " \u2014 residue position (peptide-relative for Path B, ",
+                "protein-relative for Path A / site matrix)")
+      ),
+      tags$p(
+        "The table is filterable and sortable. Use the column filters to search for ",
+        "specific genes or sites of interest."
+      ),
+      tags$hr(),
+      tags$p(class = "text-muted small",
+        tags$strong("References:"), tags$br(),
+        "Ritchie ME et al. (2015) limma powers differential expression analyses. ",
+        tags$em("Nucleic Acids Res"), " 43(7):e47.", tags$br(),
+        "Tyanova S et al. (2016) The Perseus computational platform for comprehensive ",
+        "analysis of (prote)omics data. ", tags$em("Nature Methods"), " 13:731-740."
+      ),
+      easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  observeEvent(input$phospho_residue_info_btn, {
+    showModal(modalDialog(
+      title = "Residue Distribution",
+      tags$p(
+        "This bar chart shows the distribution of phosphorylated residues (Serine, Threonine, ",
+        "Tyrosine) across all quantified sites and among statistically significant sites."
+      ),
+      tags$p(
+        tags$strong("Expected distribution "), "(from TiO2 or IMAC enrichment): ",
+        "~85% phosphoserine (pS), ~14% phosphothreonine (pT), ~1% phosphotyrosine (pY). ",
+        "Substantial deviations may indicate enrichment bias or biology-driven shifts."
+      ),
+      tags$p(
+        "A higher-than-expected pY proportion among significant hits could suggest ",
+        "active tyrosine kinase signaling in your experimental condition."
+      ),
+      tags$hr(),
+      tags$p(class = "text-muted small",
+        tags$strong("References:"), tags$br(),
+        "Olsen JV et al. (2006) Global, in vivo, and site-specific phosphorylation dynamics ",
+        "in signaling networks. ", tags$em("Cell"), " 127:635-648.", tags$br(),
+        "Sharma K et al. (2014) Ultradeep human phosphoproteome reveals a distinct regulatory ",
+        "nature of Tyr and Ser/Thr-based signaling. ", tags$em("Cell Reports"), " 8:1583-1594.", tags$br(),
+        "Humphrey SJ et al. (2015) High-throughput phosphoproteomics reveals in vivo insulin ",
+        "signaling dynamics. ", tags$em("Nature Biotechnology"), " 33:990-995."
+      ),
+      easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  observeEvent(input$phospho_completeness_info_btn, {
+    showModal(modalDialog(
+      title = "Phosphosite Completeness QC",
+      tags$p(
+        "This histogram shows the data completeness for each phosphosite across all samples. ",
+        "A site with 100% completeness was quantified in every sample; a site with 50% ",
+        "completeness was quantified in half of the samples."
+      ),
+      tags$p(
+        tags$strong("Why this matters: "),
+        "Phosphoproteomics data is inherently more missing than protein-level data because ",
+        "phosphopeptides are less abundant. Sites with very low completeness may represent ",
+        "stochastic detection events rather than reproducible biology."
+      ),
+      tags$p(
+        "The red dashed line at 50% marks the default filtering threshold. Sites below this ",
+        "threshold are removed before imputation and differential expression testing to reduce ",
+        "false discoveries from imputation-driven signals."
+      ),
+      tags$hr(),
+      tags$p(class = "text-muted small",
+        tags$strong("References:"), tags$br(),
+        "Webb-Robertson BJ et al. (2015) Review, evaluation, and discussion of the challenges ",
+        "of missing value imputation for mass spectrometry-based label-free global proteomics. ",
+        tags$em("J Proteome Res"), " 14:1993-2001.", tags$br(),
+        "Lazar C et al. (2016) Accounting for the multiple natures of missing values in label-free ",
+        "quantitative proteomics data sets to compare imputation strategies. ",
+        tags$em("J Proteome Res"), " 15:1116-1125."
+      ),
+      easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  observeEvent(input$ksea_info_btn, {
+    showModal(modalDialog(
+      title = "Kinase-Substrate Enrichment Analysis (KSEA)",
+      tags$p(
+        "KSEA infers upstream kinase activity from the phosphosite fold-changes in your data. ",
+        "It uses known kinase-substrate relationships from the ",
+        tags$strong("PhosphoSitePlus"), " and ", tags$strong("NetworKIN"), " databases to ",
+        "aggregate substrate fold-changes for each kinase into a z-score."
+      ),
+      tags$p(tags$strong("How to interpret:")),
+      tags$ul(
+        tags$li(tags$strong("Positive z-score (red)"), " \u2014 substrates of this kinase are ",
+                "collectively up-regulated, suggesting the kinase is ", tags$em("more active"), "."),
+        tags$li(tags$strong("Negative z-score (blue)"), " \u2014 substrates are collectively ",
+                "down-regulated, suggesting the kinase is ", tags$em("less active"), "."),
+        tags$li(tags$strong("n="), " \u2014 number of substrates from your data matched to that kinase. ",
+                "Higher n gives more statistical power.")
+      ),
+      tags$p(
+        "FDR < 0.05 kinases are shown by default. The bar labels indicate the number of ",
+        "substrate sites contributing to each kinase score."
+      ),
+      tags$hr(),
+      tags$p(class = "text-muted small",
+        tags$strong("References:"), tags$br(),
+        "Casado P et al. (2013) Kinase-substrate enrichment analysis provides insights into ",
+        "the heterogeneity of signaling pathway activation in leukemia cells. ",
+        tags$em("Sci Signaling"), " 6:rs6.", tags$br(),
+        "Wiredja DD et al. (2017) The KSEA App: a web-based tool for kinase activity inference ",
+        "from quantitative phosphoproteomics. ", tags$em("Bioinformatics"), " 33:3489-3491.", tags$br(),
+        "Hornbeck PV et al. (2015) PhosphoSitePlus, 2014: mutations, PTMs and recalibrations. ",
+        tags$em("Nucleic Acids Res"), " 43:D512-D520.", tags$br(),
+        "Linding R et al. (2007) Systematic discovery of in vivo phosphorylation networks. ",
+        tags$em("Cell"), " 129:1415-1426."
+      ),
+      easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  observeEvent(input$phospho_motif_info_btn, {
+    showModal(modalDialog(
+      title = "Phosphosite Motif Analysis",
+      tags$p(
+        "Sequence logos display the amino acid composition around regulated phosphosites ",
+        "(\u00b17 residues flanking the phosphorylated position). Logos are shown separately ",
+        "for up-regulated and down-regulated sites (FDR < 0.05, |log2FC| > 1)."
+      ),
+      tags$p(tags$strong("How to interpret motifs:")),
+      tags$ul(
+        tags$li(tags$strong("Proline at +1"), " \u2014 proline-directed kinases (CDKs, MAPKs, GSK3)"),
+        tags$li(tags$strong("Acidic residues (D/E) at +1 to +3"), " \u2014 CK2 family"),
+        tags$li(tags$strong("Arginine at -3"), " \u2014 basophilic kinases (PKA, PKC, CaMKII)"),
+        tags$li(tags$strong("No clear motif"), " \u2014 mixed kinase regulation or insufficient data")
+      ),
+      tags$p(
+        "A minimum of 10 sites is required per direction. Requires FASTA protein sequences ",
+        "(uploaded via the sidebar) to extract flanking residues."
+      ),
+      tags$hr(),
+      tags$p(class = "text-muted small",
+        tags$strong("References:"), tags$br(),
+        "Wagih O (2017) ggseqlogo: a versatile R package for drawing sequence logos. ",
+        tags$em("Bioinformatics"), " 33:3645-3647.", tags$br(),
+        "Schwartz D & Gygi SP (2005) An iterative statistical approach to the identification of ",
+        "protein phosphorylation motifs from large-scale data sets. ",
+        tags$em("Nature Biotechnology"), " 23:1391-1398.", tags$br(),
+        "Miller ML et al. (2008) Linear motif atlas for phosphorylation-dependent signaling. ",
+        tags$em("Sci Signaling"), " 1:ra2."
+      ),
+      easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  observeEvent(input$site_annotation_info_btn, {
+    showModal(modalDialog(
+      title = "Phosphosite Annotation: Known vs Novel",
+      tags$p(
+        "This tool queries two major phosphosite databases to classify each site in your ",
+        "dataset as ", tags$strong("Known"), " (previously reported) or ",
+        tags$strong("Novel"), " (not yet in databases)."
+      ),
+      tags$p(tags$strong("Data sources:")),
+      tags$ul(
+        tags$li(tags$strong("UniProt"), " \u2014 curated phosphorylation sites with experimental ",
+                "evidence codes (ECO:0000269 = published experiment, ECO:0007744 = large-scale study)"),
+        tags$li(tags$strong("PhosphoSitePlus"), " \u2014 kinase-substrate database bundled with the ",
+                "KSEAapp R package (Hornbeck et al. 2015)")
+      ),
+      tags$p(
+        "A site is marked 'Known' if it matches either database at the same protein + residue + position. ",
+        "Novel sites may represent genuinely undiscovered regulation or positional mismatches ",
+        "(e.g., peptide-relative vs protein-relative numbering)."
+      ),
+      tags$p(
+        tags$em("Tip: "), "Path A (DIA-NN site matrix upload) provides protein-relative positions ",
+        "that match database numbering more accurately than Path B (parsed from report)."
+      ),
+      tags$hr(),
+      tags$p(class = "text-muted small",
+        tags$strong("References:"), tags$br(),
+        "UniProt Consortium (2023) UniProt: the Universal Protein Knowledgebase in 2023. ",
+        tags$em("Nucleic Acids Res"), " 51:D523-D531.", tags$br(),
+        "Hornbeck PV et al. (2015) PhosphoSitePlus, 2014: mutations, PTMs and recalibrations. ",
+        tags$em("Nucleic Acids Res"), " 43:D512-D520.", tags$br(),
+        "Ochoa D et al. (2020) The functional landscape of the human phosphoproteome. ",
+        tags$em("Nature Biotechnology"), " 38:365-373."
+      ),
+      easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  # ============================================================================
+  #  Fullscreen Modal Plots
+  # ============================================================================
+
+  # --- Phospho Volcano Fullscreen ---
+  observeEvent(input$phospho_volcano_fullscreen_btn, {
+    showModal(modalDialog(
+      title = "Phosphosite Volcano Plot",
+      plotOutput("phospho_volcano_fullscreen", height = "85vh"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  output$phospho_volcano_fullscreen <- renderPlot({
+    req(values$phospho_fit, input$phospho_contrast_selector)
+    de <- limma::topTable(values$phospho_fit,
+                          coef = input$phospho_contrast_selector,
+                          number = Inf, sort.by = "none")
+    de$SiteID <- rownames(de)
+    if (!is.null(values$phospho_site_info)) {
+      de <- merge(de, values$phospho_site_info, by = "SiteID", all.x = TRUE)
+    }
+    correction_active <- FALSE
+    if (isTRUE(input$phospho_protein_correction) && !is.null(values$fit)) {
+      corrected <- phospho_corrected_de()
+      if (!is.null(corrected)) {
+        corr_map <- stats::setNames(corrected$corrected_logFC, corrected$SiteID)
+        matched <- corr_map[de$SiteID]
+        de$logFC[!is.na(matched)] <- matched[!is.na(matched)]
+        correction_active <- TRUE
+      }
+    }
+    de$sig <- dplyr::case_when(
+      de$adj.P.Val < 0.05 & abs(de$logFC) > 1 ~ "Significant",
+      de$adj.P.Val < 0.05 ~ "FDR < 0.05",
+      TRUE ~ "NS"
+    )
+    n_sig  <- sum(de$sig == "Significant")
+    n_up   <- sum(de$sig == "Significant" & de$logFC > 0)
+    n_down <- sum(de$sig == "Significant" & de$logFC < 0)
+    de$label <- ifelse(
+      !is.na(de$Genes) & !is.na(de$Residue) & de$Genes != "",
+      paste0(de$Genes, " ", de$Residue, de$Position), de$SiteID
+    )
+    sig_de <- de[de$sig == "Significant", ]
+    if (nrow(sig_de) > 0) {
+      sig_de <- sig_de[order(sig_de$adj.P.Val), ]
+      label_de <- head(sig_de, 20)
+    } else {
+      label_de <- sig_de[0, ]
+    }
+    ggplot2::ggplot(de, ggplot2::aes(x = logFC, y = -log10(adj.P.Val), color = sig)) +
+      ggplot2::geom_point(alpha = 0.6, size = 2) +
+      ggplot2::scale_color_manual(values = c(
+        "Significant" = "#E63946", "FDR < 0.05" = "#457B9D", "NS" = "gray70"
+      )) +
+      ggrepel::geom_text_repel(
+        data = label_de, ggplot2::aes(label = label),
+        size = 3.5, max.overlaps = 25, color = "black"
+      ) +
+      ggplot2::geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "gray50") +
+      ggplot2::geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "gray50") +
+      ggplot2::labs(
+        title = paste("Phosphosite Volcano:", input$phospho_contrast_selector,
+                      if (correction_active) "(protein-corrected)" else ""),
+        subtitle = sprintf("%d sites | %d significant (\u2191%d \u2193%d) at |FC|>2 & FDR<0.05",
+                           nrow(de), n_sig, n_up, n_down),
+        x = if (correction_active) "Corrected log2 FC (phospho - protein)" else "log2 Fold Change (phosphosite)",
+        y = "-log10(adjusted p-value)"
+      ) +
+      ggplot2::theme_bw(base_size = 16) +
+      ggplot2::theme(legend.position = "bottom",
+                     plot.subtitle = ggplot2::element_text(color = "gray40"))
+  })
+
+  # --- Residue Distribution Fullscreen ---
+  observeEvent(input$phospho_residue_fullscreen_btn, {
+    showModal(modalDialog(
+      title = "Residue Distribution",
+      plotOutput("phospho_residue_fullscreen", height = "85vh"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  output$phospho_residue_fullscreen <- renderPlot({
+    req(values$phospho_fit, input$phospho_contrast_selector, values$phospho_site_info)
+    de <- limma::topTable(values$phospho_fit,
+                          coef = input$phospho_contrast_selector,
+                          number = Inf)
+    de$SiteID <- rownames(de)
+    de <- merge(de, values$phospho_site_info, by = "SiteID")
+    all_counts <- table(factor(de$Residue, levels = c("S", "T", "Y")))
+    sig_de <- de[de$adj.P.Val < 0.05, ]
+    sig_counts <- table(factor(sig_de$Residue, levels = c("S", "T", "Y")))
+    plot_data <- data.frame(
+      Residue  = rep(c("S", "T", "Y"), 2),
+      Count    = c(as.numeric(all_counts), as.numeric(sig_counts)),
+      Category = rep(c("All quantified", "Significant (FDR < 0.05)"), each = 3)
+    )
+    plot_data$Count[is.na(plot_data$Count)] <- 0
+    ggplot2::ggplot(plot_data, ggplot2::aes(x = Residue, y = Count, fill = Category)) +
+      ggplot2::geom_col(position = "dodge", alpha = 0.8) +
+      ggplot2::scale_fill_manual(values = c(
+        "All quantified" = "#457B9D", "Significant (FDR < 0.05)" = "#E63946"
+      )) +
+      ggplot2::labs(
+        title = "Phosphosite Residue Distribution",
+        subtitle = "Expected: ~85% Ser / ~14% Thr / ~1% Tyr (typical TiO2/IMAC enrichment)",
+        x = "Phosphorylated Residue", y = "Number of Sites"
+      ) +
+      ggplot2::theme_bw(base_size = 16) +
+      ggplot2::theme(legend.position = "bottom")
+  })
+
+  # --- Completeness QC Fullscreen ---
+  observeEvent(input$phospho_completeness_fullscreen_btn, {
+    showModal(modalDialog(
+      title = "Phosphosite Completeness QC",
+      plotOutput("phospho_completeness_fullscreen", height = "85vh"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  output$phospho_completeness_fullscreen <- renderPlot({
+    req(values$phospho_site_matrix)
+    mat <- values$phospho_site_matrix
+    n_sites   <- nrow(mat)
+    n_samples <- ncol(mat)
+    site_completeness <- rowSums(!is.na(mat)) / n_samples * 100
+    hist_data <- data.frame(Completeness = site_completeness)
+    ggplot2::ggplot(hist_data, ggplot2::aes(x = Completeness)) +
+      ggplot2::geom_histogram(bins = 20, fill = "#457B9D", color = "white", alpha = 0.8) +
+      ggplot2::geom_vline(xintercept = 50, linetype = "dashed", color = "red") +
+      ggplot2::annotate("text", x = 52, y = Inf, vjust = 2, hjust = 0,
+                        label = "50% threshold", color = "red", size = 4.5) +
+      ggplot2::labs(
+        title = "Phosphosite Quantification Completeness",
+        subtitle = sprintf("%s sites across %d samples | Median completeness: %.0f%%",
+                           format(n_sites, big.mark = ","), n_samples,
+                           median(site_completeness)),
+        x = "% of Samples with Quantification", y = "Number of Phosphosites"
+      ) +
+      ggplot2::theme_bw(base_size = 16)
+  })
+
+  # --- KSEA Barplot Fullscreen ---
+  observeEvent(input$ksea_fullscreen_btn, {
+    showModal(modalDialog(
+      title = "Kinase Activity (KSEA)",
+      plotOutput("ksea_barplot_fullscreen", height = "85vh"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  output$ksea_barplot_fullscreen <- renderPlot({
+    req(values$ksea_results)
+    ks <- values$ksea_results
+    ks <- ks[order(ks$z.score, decreasing = TRUE), ]
+    sig_ks <- ks[ks$FDR < 0.05, ]
+    if (nrow(sig_ks) == 0) sig_ks <- utils::head(ks, 20)
+    top_up   <- utils::head(sig_ks[sig_ks$z.score > 0, ], 15)
+    top_down <- utils::tail(sig_ks[sig_ks$z.score < 0, ], 15)
+    plot_ks  <- rbind(top_up, top_down)
+    if (nrow(plot_ks) == 0) {
+      plot.new()
+      text(0.5, 0.5, "No kinases scored (insufficient substrate matches)")
+      return()
+    }
+    plot_ks <- plot_ks[order(plot_ks$z.score), ]
+    plot_ks$Kinase.Gene <- factor(plot_ks$Kinase.Gene, levels = plot_ks$Kinase.Gene)
+    plot_ks$Direction <- ifelse(plot_ks$z.score > 0, "Activated", "Inhibited")
+    ggplot2::ggplot(plot_ks, ggplot2::aes(x = z.score, y = Kinase.Gene, fill = Direction)) +
+      ggplot2::geom_col(alpha = 0.85) +
+      ggplot2::scale_fill_manual(values = c("Activated" = "#E63946", "Inhibited" = "#457B9D")) +
+      ggplot2::geom_text(
+        ggplot2::aes(label = sprintf("n=%d", m)),
+        hjust = ifelse(plot_ks$z.score > 0, -0.1, 1.1), size = 3.5
+      ) +
+      ggplot2::labs(
+        title = paste("Kinase Activity:", values$ksea_last_contrast),
+        subtitle = "KSEA z-scores (PhosphoSitePlus + NetworKIN substrates)",
+        x = "KSEA z-score", y = NULL
+      ) +
+      ggplot2::theme_bw(base_size = 15) +
+      ggplot2::theme(legend.position = "bottom")
+  })
+
+  # --- Motif Analysis Fullscreen ---
+  observeEvent(input$phospho_motif_fullscreen_btn, {
+    showModal(modalDialog(
+      title = "Motif Analysis",
+      plotOutput("phospho_motif_up_fullscreen", height = "40vh"),
+      plotOutput("phospho_motif_down_fullscreen", height = "40vh"),
+      size = "xl", easyClose = TRUE, footer = modalButton("Close")
+    ))
+  })
+
+  output$phospho_motif_up_fullscreen <- renderPlot({
+    seqs <- phospho_flanking_seqs()
+    if (is.null(seqs) || length(seqs$up) < 10) {
+      plot.new()
+      text(0.5, 0.5, "Insufficient up-regulated sites for motif", cex = 1.2, col = "gray50")
+      return()
+    }
+    if (!requireNamespace("ggseqlogo", quietly = TRUE)) {
+      plot.new()
+      text(0.5, 0.5, "ggseqlogo package not installed", cex = 1.2, col = "gray50")
+      return()
+    }
+    ggseqlogo::ggseqlogo(seqs$up, method = "bits", seq_type = "aa") +
+      ggplot2::ggtitle(sprintf("Up-regulated phosphosites (n=%d)", length(seqs$up))) +
+      ggplot2::theme(plot.title = ggplot2::element_text(size = 14))
+  })
+
+  output$phospho_motif_down_fullscreen <- renderPlot({
+    seqs <- phospho_flanking_seqs()
+    if (is.null(seqs) || length(seqs$down) < 10) {
+      plot.new()
+      text(0.5, 0.5, "Insufficient down-regulated sites for motif", cex = 1.2, col = "gray50")
+      return()
+    }
+    if (!requireNamespace("ggseqlogo", quietly = TRUE)) {
+      plot.new()
+      text(0.5, 0.5, "ggseqlogo package not installed", cex = 1.2, col = "gray50")
+      return()
+    }
+    ggseqlogo::ggseqlogo(seqs$down, method = "bits", seq_type = "aa") +
+      ggplot2::ggtitle(sprintf("Down-regulated phosphosites (n=%d)", length(seqs$down))) +
+      ggplot2::theme(plot.title = ggplot2::element_text(size = 14))
+  })
 
 }

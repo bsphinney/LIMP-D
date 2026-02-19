@@ -1,9 +1,9 @@
 # ==============================================================================
 #  USER INTERFACE (UI) — Build the complete app UI
-#  Called from app.R as: ui <- build_ui(is_hf_space)
+#  Called from app.R as: ui <- build_ui(is_hf_space, hpc_mode, local_sbatch)
 # ==============================================================================
 
-build_ui <- function(is_hf_space) {
+build_ui <- function(is_hf_space, hpc_mode = FALSE, local_sbatch = FALSE) {
   page_sidebar(
   title = "DE-LIMP Proteomics",
   theme = bs_theme(bootswatch = "flatly"),
@@ -135,11 +135,10 @@ build_ui <- function(is_hf_space) {
       ),
       conditionalPanel(
         condition = "input.phospho_input_mode == 'site_matrix'",
-        fileInput("phospho_site_matrix_file", "Upload site_matrix parquet",
-                  accept = ".parquet"),
+        fileInput("phospho_site_matrix_file", "Upload site matrix (.tsv or .parquet)",
+                  accept = c(".tsv", ".parquet", ".txt")),
         tags$p(class = "text-muted small",
-          "Upload the ", tags$code("site_matrix_0.9.parquet"), " or ",
-          tags$code("site_matrix_0.99.parquet"), " from DIA-NN 1.9+."
+          "Upload the site localization matrix from DIA-NN (TSV or parquet format)."
         )
       ),
       conditionalPanel(
@@ -198,6 +197,312 @@ build_ui <- function(is_hf_space) {
 
   navset_card_tab(
     id = "main_tabs",
+
+    # ==========================================================================
+    # New Search tab (HPC only — visible when sbatch is on PATH)
+    # ==========================================================================
+    if (hpc_mode) nav_panel("New Search", icon = icon("rocket"),
+      # Three-panel wizard layout
+      layout_column_wrap(
+        width = 1/3,
+
+        # === PANEL 1: FILES ===
+        card(
+          card_header(tagList(icon("folder-open"), " 1. Files")),
+          card_body(
+            style = "overflow-y: auto; max-height: calc(100vh - 200px);",
+
+            textInput("analysis_name", "Analysis Name",
+              value = paste0("search_", format(Sys.Date(), "%Y%m%d")),
+              placeholder = "e.g., HeLa_DIA_2026"),
+
+            hr(),
+            tags$h6(icon("hard-drive"), " Raw Data"),
+            conditionalPanel("input.search_connection_mode != 'ssh'",
+              shinyFiles::shinyDirButton("raw_data_dir", "Select Raw Data Folder",
+                title = "Choose directory with .d / .raw / .mzML files",
+                class = "btn-outline-primary btn-sm w-100")
+            ),
+            conditionalPanel("input.search_connection_mode == 'ssh'",
+              div(style = "display: flex; gap: 5px;",
+                div(style = "flex: 1;",
+                  textInput("ssh_raw_data_dir", NULL,
+                    placeholder = "/share/proteomics/raw/experiment_001")
+                ),
+                actionButton("ssh_scan_raw_btn", "Scan", icon = icon("magnifying-glass"),
+                  class = "btn-outline-secondary btn-sm", style = "margin-top: 0;")
+              )
+            ),
+            uiOutput("raw_file_summary"),
+
+            hr(),
+            tags$h6(icon("dna"), " FASTA Database"),
+            navset_card_tab(
+              id = "fasta_source_tabs",
+
+              nav_panel("UniProt", icon = icon("globe"),
+                div(style = "display: flex; gap: 8px; margin-bottom: 10px;",
+                  div(style = "flex: 1;",
+                    textInput("uniprot_search_query", NULL,
+                      placeholder = "e.g., human, mouse, E. coli")
+                  ),
+                  actionButton("search_uniprot", "Search",
+                    class = "btn-info btn-sm", style = "margin-top: 0;")
+                ),
+                DTOutput("uniprot_results_table", height = "180px"),
+                radioButtons("fasta_content_type", "Content:",
+                  choices = c(
+                    "One per gene (recommended)" = "one_per_gene",
+                    "Swiss-Prot reviewed" = "reviewed",
+                    "Full proteome" = "full",
+                    "Full + isoforms" = "full_isoforms"
+                  ), selected = "one_per_gene"
+                ),
+                checkboxInput("append_contaminants", "Append contaminants", TRUE),
+                uiOutput("fasta_filename_preview"),
+                actionButton("download_fasta_btn", "Download FASTA",
+                  class = "btn-success btn-sm w-100", icon = icon("download"))
+              ),
+
+              nav_panel("Pre-staged", icon = icon("database"),
+                selectInput("prestaged_fasta", "Available Databases:",
+                  choices = NULL, width = "100%"),
+                uiOutput("prestaged_fasta_info")
+              ),
+
+              nav_panel("Browse", icon = icon("folder-tree"),
+                conditionalPanel("input.search_connection_mode != 'ssh'",
+                  shinyFiles::shinyDirButton("fasta_browse_dir", "Browse for FASTA Folder",
+                    title = "Navigate to FASTA directory",
+                    class = "btn-outline-primary btn-sm w-100")
+                ),
+                conditionalPanel("input.search_connection_mode == 'ssh'",
+                  div(style = "display: flex; gap: 5px;",
+                    div(style = "flex: 1;",
+                      textInput("ssh_fasta_browse_dir", NULL,
+                        placeholder = "/share/proteomics/fasta/")
+                    ),
+                    actionButton("ssh_scan_fasta_btn", "Scan", icon = icon("magnifying-glass"),
+                      class = "btn-outline-secondary btn-sm", style = "margin-top: 0;")
+                  )
+                ),
+                uiOutput("browsed_fasta_info")
+              )
+            ),
+
+            hr(),
+            tags$h6(icon("book"), " Spectral Library (optional)"),
+            conditionalPanel("input.search_connection_mode != 'ssh'",
+              shinyFiles::shinyFilesButton("lib_file", "Select .speclib File",
+                title = "Choose spectral library",
+                class = "btn-outline-secondary btn-sm w-100",
+                multiple = FALSE)
+            ),
+            conditionalPanel("input.search_connection_mode == 'ssh'",
+              textInput("ssh_lib_file", NULL,
+                placeholder = "/share/proteomics/libraries/my.speclib")
+            ),
+            uiOutput("lib_file_info")
+          )
+        ),
+
+        # === PANEL 2: SEARCH SETTINGS ===
+        card(
+          card_header(tagList(icon("sliders"), " 2. Search Settings")),
+          card_body(
+            style = "overflow-y: auto; max-height: calc(100vh - 200px);",
+
+            radioButtons("search_mode", "Search Mode:",
+              choices = c(
+                "Library-free (default)" = "libfree",
+                "Use spectral library" = "library"
+              ), selected = "libfree"
+            ),
+
+            radioButtons("diann_normalization", "DIA-NN Normalization:",
+              choices = c(
+                "RT-dependent (default)" = "on",
+                "Off (for AP-MS / Co-IP)" = "off"
+              ), selected = "on"
+            ),
+            uiOutput("norm_guidance_search"),
+
+            hr(),
+            tags$h6("Basic Parameters"),
+            div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+              div(style = "flex: 1; min-width: 120px;",
+                selectInput("diann_enzyme", "Enzyme:",
+                  choices = c("Trypsin/P (K*,R*)" = "K*,R*",
+                              "Trypsin strict" = "K,R",
+                              "Lys-C" = "K",
+                              "Chymotrypsin" = "F,W,Y,L",
+                              "None" = "-"),
+                  selected = "K*,R*")
+              ),
+              div(style = "flex: 1; min-width: 100px;",
+                numericInput("diann_missed_cleavages", "Missed Cleavages:",
+                  value = 1, min = 0, max = 5)
+              )
+            ),
+
+            div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+              div(style = "flex: 1; min-width: 120px;",
+                numericInput("diann_max_var_mods", "Max Variable Mods:",
+                  value = 1, min = 0, max = 5)
+              ),
+              div(style = "flex: 1; min-width: 120px;",
+                selectInput("mass_acc_mode", "Mass Accuracy:",
+                  choices = c("Automatic" = "auto", "Manual" = "manual"),
+                  selected = "auto")
+              )
+            ),
+
+            conditionalPanel(
+              condition = "input.mass_acc_mode == 'manual'",
+              div(style = "display: flex; gap: 8px;",
+                div(style = "flex: 1;",
+                  numericInput("diann_mass_acc", "MS2 (ppm):", value = 14, min = 1, max = 50)
+                ),
+                div(style = "flex: 1;",
+                  numericInput("diann_mass_acc_ms1", "MS1 (ppm):", value = 14, min = 1, max = 50)
+                )
+              )
+            ),
+
+            tags$h6("Variable Modifications"),
+            checkboxInput("mod_met_ox", "Methionine oxidation (UniMod:35)", TRUE),
+            checkboxInput("mod_nterm_acetyl", "N-term acetylation (UniMod:1)", FALSE),
+            textAreaInput("extra_var_mods", "Additional Mods (one per line):",
+              placeholder = "e.g., UniMod:21,79.966331,STY", rows = 2),
+
+            # Advanced accordion
+            accordion(
+              id = "search_advanced_accordion",
+              open = FALSE,
+              accordion_panel(
+                "Advanced Options",
+                icon = icon("gear"),
+
+                tags$h6("Peptide/Precursor Ranges"),
+                div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+                  div(style = "flex: 1; min-width: 100px;",
+                    numericInput("min_pep_len", "Min Peptide:", value = 7, min = 4, max = 15)
+                  ),
+                  div(style = "flex: 1; min-width: 100px;",
+                    numericInput("max_pep_len", "Max Peptide:", value = 30, min = 15, max = 52)
+                  )
+                ),
+                div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+                  div(style = "flex: 1; min-width: 100px;",
+                    numericInput("min_pr_mz", "Min m/z:", value = 300, min = 100, max = 500)
+                  ),
+                  div(style = "flex: 1; min-width: 100px;",
+                    numericInput("max_pr_mz", "Max m/z:", value = 1200, min = 800, max = 2000)
+                  )
+                ),
+
+                tags$h6("Processing Options"),
+                checkboxInput("diann_mbr", "Match Between Runs (MBR)", TRUE),
+                checkboxInput("diann_rt_profiling", "RT profiling", TRUE),
+                checkboxInput("diann_xic", "Generate XICs", TRUE),
+                checkboxInput("diann_unimod4", "UniMod4 (carbamidomethylation)", TRUE),
+                checkboxInput("diann_met_excision", "N-term methionine excision", TRUE),
+
+                numericInput("diann_scan_window", "Scan Window:", value = 6, min = 0, max = 20),
+
+                textAreaInput("extra_cli_flags", "Extra DIA-NN Flags:",
+                  placeholder = "e.g., --peptidoforms --min-pr-charge 2", rows = 2),
+
+                numericInput("diann_fdr", "FDR Threshold:", value = 0.01, min = 0.001, max = 0.1, step = 0.005)
+              )
+            )
+          )
+        ),
+
+        # === PANEL 3: RESOURCES & SUBMIT ===
+        card(
+          card_header(tagList(icon("server"), " 3. Resources & Submit")),
+          card_body(
+            style = "overflow-y: auto; max-height: calc(100vh - 200px);",
+
+            tags$h6(icon("plug"), " Connection Mode"),
+            radioButtons("search_connection_mode", NULL,
+              choices = c("Local (on HPC)" = "local", "Remote (SSH)" = "ssh"),
+              selected = if (local_sbatch) "local" else "ssh", inline = TRUE),
+            conditionalPanel("input.search_connection_mode == 'ssh'",
+              textInput("ssh_host", "HPC Hostname",
+                placeholder = "hive.genomecenter.ucdavis.edu"),
+              div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+                div(style = "flex: 1; min-width: 100px;",
+                  textInput("ssh_user", "Username", value = Sys.getenv("USER"))
+                ),
+                div(style = "flex: 1; min-width: 80px;",
+                  numericInput("ssh_port", "Port", value = 22, min = 1, max = 65535)
+                )
+              ),
+              textInput("ssh_key_path", "SSH Key Path",
+                value = paste0(Sys.getenv("HOME"), "/.ssh/id_rsa")),
+              actionButton("test_ssh_btn", "Test Connection",
+                icon = icon("plug"), class = "btn-outline-info btn-sm"),
+              uiOutput("ssh_status_ui")
+            ),
+
+            hr(),
+            tags$h6("SLURM Resources"),
+            div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+              div(style = "flex: 1; min-width: 100px;",
+                numericInput("diann_cpus", "CPUs:", value = 64, min = 4, max = 128, step = 4)
+              ),
+              div(style = "flex: 1; min-width: 100px;",
+                numericInput("diann_mem_gb", "Memory (GB):", value = 512, min = 16, max = 1024, step = 16)
+              )
+            ),
+            div(style = "display: flex; gap: 8px; flex-wrap: wrap;",
+              div(style = "flex: 1; min-width: 100px;",
+                numericInput("diann_time_hours", "Time (hrs):", value = 12, min = 1, max = 48)
+              ),
+              div(style = "flex: 1; min-width: 100px;",
+                textInput("diann_partition", "Partition:", value = "high")
+              )
+            ),
+            textInput("diann_account", "Account:", value = "genome-center-grp"),
+
+            hr(),
+            tags$h6("DIA-NN Container"),
+            textInput("diann_sif_path", "Apptainer SIF Path:",
+              value = "/share/proteomics/sw/diann_2.3.0.sif",
+              placeholder = "/path/to/diann_2.3.0.sif"),
+
+            hr(),
+            tags$h6("Output Directory"),
+            conditionalPanel("input.search_connection_mode != 'ssh'",
+              shinyFiles::shinyDirButton("output_base_dir", "Select Output Folder",
+                title = "Choose base output directory",
+                class = "btn-outline-primary btn-sm w-100")
+            ),
+            conditionalPanel("input.search_connection_mode == 'ssh'",
+              textInput("ssh_output_base_dir", NULL, value = "",
+                placeholder = "/share/proteomics/results/")
+            ),
+            verbatimTextOutput("full_output_path"),
+
+            hr(),
+            uiOutput("time_estimate_ui"),
+
+            actionButton("submit_diann", "Submit DIA-NN Search",
+              class = "btn-success btn-lg w-100",
+              icon = icon("rocket"),
+              style = "margin-top: 10px;"),
+
+            checkboxInput("auto_load_results", "Auto-load results when complete", TRUE),
+
+            hr(),
+            tags$h6(icon("list-check"), " Job Queue"),
+            uiOutput("search_queue_ui")
+          )
+        )
+      )
+    ),
 
     nav_panel("Data Overview", icon = icon("database"),
               # Data views as tabs

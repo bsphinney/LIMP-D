@@ -148,6 +148,21 @@ options(shiny.maxRequestSize = 5000 * 1024^2)  # 5 GB upload limit
 # Detect Hugging Face Spaces environment (SPACE_ID is set automatically by HF)
 is_hf_space <- nzchar(Sys.getenv("SPACE_ID", ""))
 
+# Detect HPC mode (sbatch on PATH for local, or ssh for remote submission)
+local_sbatch <- nzchar(Sys.which("sbatch"))
+hpc_mode <- local_sbatch || nzchar(Sys.which("ssh"))
+
+# Conditionally load HPC-only packages
+if (hpc_mode) {
+  for (pkg in c("shinyFiles", "jsonlite")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      install.packages(pkg, quiet = TRUE)
+    }
+  }
+  library(shinyFiles)
+  library(jsonlite)
+}
+
 # Verify Limpa installation
 if (!requireNamespace("limpa", quietly = TRUE)) {
   os_type <- Sys.info()["sysname"]
@@ -187,7 +202,7 @@ local({
   }
 })
 
-ui <- build_ui(is_hf_space)
+ui <- build_ui(is_hf_space, hpc_mode, local_sbatch)
 
 # ==============================================================================
 #  SERVER LOGIC — Thin orchestrator calling R/ modules
@@ -232,7 +247,15 @@ server <- function(input, output, session) {
     ksea_last_contrast = NULL,
     phospho_fasta_sequences = NULL,
     phospho_corrected_active = FALSE,
-    phospho_annotations = NULL
+    phospho_annotations = NULL,
+    # DIA-NN HPC Search
+    diann_jobs = list(),
+    diann_raw_files = NULL,
+    diann_fasta_files = character(),
+    diann_speclib = NULL,
+    uniprot_results = NULL,
+    fasta_info = NULL,
+    ssh_connected = FALSE
   )
 
   # --- Shared helper: append to reproducibility log ---
@@ -251,6 +274,7 @@ server <- function(input, output, session) {
   server_ai(input, output, session, values)
   server_xic(input, output, session, values, is_hf_space)
   server_phospho(input, output, session, values, add_to_log)
+  server_search(input, output, session, values, add_to_log, hpc_mode)
   server_session(input, output, session, values, add_to_log)
 }
 

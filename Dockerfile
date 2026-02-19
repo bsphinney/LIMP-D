@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install R Dependencies (CRAN)
-RUN R -e "install.packages(c('bslib', 'readr', 'tibble', 'dplyr', 'tidyr', 'ggplot2', 'httr2', 'rhandsontable', 'DT', 'arrow', 'shinyjs', 'plotly', 'stringr', 'ggrepel', 'remotes', 'BiocManager', 'markdown'), repos='https://cloud.r-project.org/')"
+RUN R -e "install.packages(c('bslib', 'readr', 'tibble', 'dplyr', 'tidyr', 'ggplot2', 'httr2', 'rhandsontable', 'DT', 'arrow', 'shinyjs', 'plotly', 'stringr', 'ggrepel', 'remotes', 'BiocManager', 'markdown', 'shinyFiles', 'jsonlite'), repos='https://cloud.r-project.org/')"
 
 # 2b. Install phosphoproteomics packages (KSEA kinase activity, sequence logos)
 RUN R -e "install.packages(c('KSEAapp', 'ggseqlogo'), repos='https://cloud.r-project.org/')"
