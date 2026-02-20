@@ -346,7 +346,11 @@ Current version: **v2.5.0** (2026-02-18). See [CHANGELOG.md](CHANGELOG.md) for d
 - [ ] **Phospho-specific FASTA upload**: Map peptide-relative positions to protein-relative positions for accurate site IDs and motif extraction
 
 ### DIA-NN Local Search (Docker)
-- [ ] **Bundle DIA-NN in Docker image**: Install DIA-NN binary in the Dockerfile so searches can run locally inside the container without SSH to an HPC. Detect local DIA-NN availability alongside existing `sbatch`/`ssh` checks. Add a "Local" search mode that runs DIA-NN directly (no SLURM, no SSH) with progress monitoring. Update `hpc_mode` logic and Search tab UI to support local execution path.
+**Spec**: `DIANN_SEARCH_INTEGRATION_SPEC.md` — full design for unified Local Docker + HPC backends ("one UI, two engines")
+- [ ] **Bundle DIA-NN in Docker image**: Install DIA-NN binary in the Dockerfile so searches can run locally inside the container without SSH to an HPC
+- [ ] **Local compute backend**: Add "Local Docker" option to compute backend toggle that runs DIA-NN directly (no SLURM, no SSH) with progress monitoring via log file polling
+- [ ] **Unified UI**: Same search configuration UI for both backends; only resource controls differ (Docker: CPU/RAM limits vs HPC: SLURM partition/nodes)
+- [ ] **Update `hpc_mode` logic**: Detect local DIA-NN availability as a third mode alongside `sbatch`/`ssh`
 
 ### General
 - [ ] Grid View: Open violin plot on protein click with bar plot toggle
