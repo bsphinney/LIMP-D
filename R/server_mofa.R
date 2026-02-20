@@ -580,44 +580,58 @@ server_mofa <- function(input, output, session, values, add_to_log) {
           mat[, common_samples, drop = FALSE]
         })
 
-        # Step 2: Create MOFA object
-        incProgress(0.2, detail = "Creating MOFA object...")
-        mofa_obj <- MOFA2::create_mofa(mofa_data)
+        # Step 2: Train in isolated subprocess
+        # CRITICAL: basilisk's Python process management crashes the R session
+        # when run inside Shiny's httpuv event loop. Using callr::r() runs the
+        # entire MOFA pipeline (create → configure → train) in a separate R
+        # process, completely isolating basilisk/Python from Shiny. The trained
+        # model is saved to HDF5, then loaded back in the main process.
+        incProgress(0.2, detail = "Training model in subprocess (this may take several minutes)...")
 
-        # Step 3: Set options
-        incProgress(0.3, detail = "Configuring model options...")
+        outfile <- tempfile(fileext = ".hdf5")
 
-        data_opts <- MOFA2::get_default_data_options(mofa_obj)
-        data_opts$scale_views <- scale_views
+        callr::r(
+          function(mofa_data, outfile, scale_views, num_factors,
+                   convergence_mode, seed_val) {
+            library(MOFA2)
 
-        model_opts <- MOFA2::get_default_model_options(mofa_obj)
-        model_opts$num_factors <- num_factors
+            mofa_obj <- create_mofa(mofa_data)
 
-        train_opts <- MOFA2::get_default_training_options(mofa_obj)
-        train_opts$convergence_mode <- convergence_mode
-        train_opts$seed <- seed_val
-        train_opts$verbose <- FALSE
+            data_opts <- get_default_data_options(mofa_obj)
+            data_opts$scale_views <- scale_views
 
-        mofa_obj <- MOFA2::prepare_mofa(mofa_obj,
-          data_options = data_opts,
-          model_options = model_opts,
-          training_options = train_opts
+            model_opts <- get_default_model_options(mofa_obj)
+            model_opts$num_factors <- num_factors
+
+            train_opts <- get_default_training_options(mofa_obj)
+            train_opts$convergence_mode <- convergence_mode
+            train_opts$seed <- seed_val
+            train_opts$verbose <- FALSE
+
+            mofa_obj <- prepare_mofa(mofa_obj,
+              data_options = data_opts,
+              model_options = model_opts,
+              training_options = train_opts
+            )
+
+            run_mofa(mofa_obj, outfile = outfile, use_basilisk = TRUE)
+          },
+          args = list(
+            mofa_data = mofa_data,
+            outfile = outfile,
+            scale_views = scale_views,
+            num_factors = num_factors,
+            convergence_mode = convergence_mode,
+            seed_val = seed_val
+          ),
+          show = FALSE
         )
 
-        # Step 4: Train
-        # CRITICAL: Always provide outfile — without it, run_mofa() can crash
-        # the R session inside Shiny because basilisk's Python process conflicts
-        # with Shiny's event loop when trying to return the model in-memory.
-        # Saving to HDF5 first, then loading back via load_model() is stable.
-        incProgress(0.4, detail = "Training model (this may take several minutes)...")
-        outfile <- tempfile(fileext = ".hdf5")
-        MOFA2::run_mofa(mofa_obj, outfile = outfile, use_basilisk = TRUE)
-
-        # Step 5: Load trained model back from HDF5
+        # Step 3: Load trained model back from HDF5 (no basilisk needed)
         incProgress(0.85, detail = "Loading trained model...")
         mofa_trained <- MOFA2::load_model(outfile)
 
-        # Step 6: Post-process
+        # Step 4: Post-process
         incProgress(0.9, detail = "Extracting results...")
 
         # Drop factors below variance threshold
