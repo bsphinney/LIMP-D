@@ -584,6 +584,32 @@ build_docker_command <- function(raw_files, fasta_files, output_dir, image_name,
     fasta_flags <- sprintf("--fasta /work/fasta%d/%s", fasta_map, basename(fasta_files))
   }
 
+  # Build the DIA-NN command that runs inside the container.
+  # CRITICAL: DIA-NN writes large intermediate files (.predicted.speclib,
+  # .quant files) to the same directory as --out. On Windows Docker Desktop,
+  # the FUSE layer for bind-mounted volumes can't handle multi-GB writes,
+  # causing "Could not save" errors. Fix: run DIA-NN with output to
+  # container-internal /tmp, then copy only the final reports to /work/out.
+  # Redirect --out-lib from /work/out/ to /tmp/diann_work/
+  diann_flags_local <- gsub("--out-lib /work/out/", "--out-lib /tmp/diann_work/", diann_flags)
+
+  diann_shell_cmd <- paste0(
+    "mkdir -p /tmp/diann_work && ",
+    paste(c(
+      "diann-linux",
+      f_flags,
+      fasta_flags,
+      sprintf("--out /tmp/diann_work/%s", report_name),
+      sprintf("--threads %d", cpus),
+      diann_flags_local
+    ), collapse = " "),
+    # Copy final outputs to the mounted volume (semicolons: run all even if some globs miss)
+    " && { cp /tmp/diann_work/*.parquet /work/out/ 2>/dev/null;",
+    " cp /tmp/diann_work/*.tsv /work/out/ 2>/dev/null;",
+    " cp -r /tmp/diann_work/*_xic /work/out/ 2>/dev/null;",
+    " true; }"
+  )
+
   # Assemble full docker run command args
   args <- c(
     "run", "--rm", "-d",
@@ -592,12 +618,9 @@ build_docker_command <- function(raw_files, fasta_files, output_dir, image_name,
     sprintf("--cpus=%d", cpus),
     sprintf("--memory=%dg", mem_gb),
     volumes,
+    "--entrypoint", "sh",
     image_name,
-    f_flags,
-    fasta_flags,
-    sprintf("--out /work/out/%s", report_name),
-    sprintf("--threads %d", cpus),
-    diann_flags
+    "-c", diann_shell_cmd
   )
 
   args
