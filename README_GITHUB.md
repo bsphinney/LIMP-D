@@ -102,14 +102,15 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Abundance Correction** - Protein-level correction to isolate stoichiometry changes
 
 ### 🔬 DIA-NN Search Integration
+- **Three backends** - Local (embedded), Docker, and HPC (SSH/SLURM) — choose what fits your setup
+- **Windows Docker Deployment** - `docker compose up` runs DE-LIMP + DIA-NN with zero R installation. See [WINDOWS_DOCKER_INSTALL.md](WINDOWS_DOCKER_INSTALL.md)
 - **HPC Search Submission** - Submit DIA-NN database searches to a remote HPC cluster via SSH without leaving DE-LIMP
 - **Non-Blocking Job Queue** - Submit multiple searches and continue using the app; results auto-load when complete
-- **SSH Remote Submission** - Key-based SSH authentication, automatic SLURM path detection, SCP file transfer
 - **UniProt FASTA Download** - Search and download proteome databases directly from UniProt (one-per-gene, reviewed, full, isoforms)
 - **Contaminant Libraries** - 6 curated contaminant FASTA libraries bundled (Universal, Cell Culture, Mouse/Rat Tissue, Neuron Culture, Stem Cell Culture)
 - **Phosphoproteomics Mode** - Auto-configures DIA-NN for phospho analysis (STY modification, max 3 var mods, `--phospho-output`)
 - **Methodology Capture** - Search parameters automatically added to the Methodology tab for publication-ready methods
-- **Job Queue Persistence** - Queue survives app restarts; active jobs resume SLURM polling automatically
+- **Job Queue Persistence** - Queue survives app restarts; active jobs resume polling automatically
 
 ### 🎓 Education Tab
 - Embedded proteomics resources and training materials
@@ -130,7 +131,12 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - Perfect for quick analyses and exploring features
 - Note: Limited computational resources compared to local installation
 
-### 💻 Local Installation (Recommended for Regular Use)
+### 🐳 Docker (Windows — Recommended)
+- **No R installation required** — everything runs inside Docker
+- Build DIA-NN image once, then `docker compose up`
+- Full guide: [WINDOWS_DOCKER_INSTALL.md](WINDOWS_DOCKER_INSTALL.md)
+
+### 💻 Local Installation (Mac/Linux)
 - Full computational power of your machine
 - Better for large datasets and multiple analyses
 - See Installation section below for setup instructions

@@ -30,12 +30,13 @@ Welcome to **DE-LIMP** (Differential Expression & Limpa Proteomics), your intera
 - **Phase 2 — Kinase Activity & Motifs**: KSEA kinase activity inference from phosphosite fold-changes, sequence logo motif analysis for enriched residue patterns
 - **Phase 3 — Advanced**: Protein-level abundance correction to isolate phosphorylation stoichiometry, AI context integration for phospho results
 
-### DIA-NN HPC Search Integration
-- **New "New Search" tab** appears when HPC/SSH mode is available — submit DIA-NN database searches directly from DE-LIMP
+### DIA-NN Search Integration
+- **Three backends**: Local (embedded in Docker), Docker (separate container), and HPC (SSH/SLURM)
+- **Windows Docker deployment**: `docker compose up` runs DE-LIMP + DIA-NN with zero R installation — see [WINDOWS_DOCKER_INSTALL.md](WINDOWS_DOCKER_INSTALL.md)
 - **SSH remote submission**: Connect to your HPC cluster via SSH key-based authentication and submit SLURM jobs without leaving the app
-- **Non-blocking job queue**: Submit multiple DIA-NN searches and continue using DE-LIMP while jobs run on the cluster
-- **Auto-load results**: Completed jobs automatically download results (via SCP for SSH) and load into the analysis pipeline, navigating to the Assign Groups tab
-- **File scanning**: Browse or scan remote directories for raw data files (.d, .raw, .mzML, .wiff) with file sizes
+- **Non-blocking job queue**: Submit multiple DIA-NN searches and continue using DE-LIMP while jobs run
+- **Auto-load results**: Completed jobs automatically load into the analysis pipeline
+- **File scanning**: Browse directories for raw data files (.d, .raw, .mzML, .wiff) with file sizes
 - **FASTA database sources**: Download from UniProt (search by organism), select pre-staged server FASTAs, or browse/enter a path
 - **Contaminant libraries**: 6 curated options from HaoGroup-ProtContLib (Universal, Cell Culture, Mouse Tissue, Rat Tissue, Neuron Culture, Stem Cell Culture)
 - **Search modes**: Library-free (default), Library-based, and Phosphoproteomics (auto-configures STY mods, --phospho-output)
@@ -142,18 +143,27 @@ This is the most critical step for statistical analysis. The workflow is streaml
 
 ---
 
-## 3. DIA-NN Database Search (HPC Integration)
+## 3. DIA-NN Database Search
 
-The **"New Search"** tab lets you submit DIA-NN database searches to an HPC cluster directly from DE-LIMP. This feature is available when running locally with access to a SLURM-based HPC — either on the cluster itself or remotely via SSH.
+The **"New Search"** tab lets you submit DIA-NN database searches directly from DE-LIMP. Three backends are supported:
 
-> **Note:** The New Search tab only appears when HPC/SSH mode is available. It is not shown on the Hugging Face web version.
+| Backend | When to Use | How It Works |
+| :--- | :--- | :--- |
+| **Local (Embedded)** | Docker Compose deployment (Windows) | DIA-NN binary runs inside the same container as DE-LIMP |
+| **Local (Docker)** | Mac/Linux with Docker installed | DIA-NN runs in a separate Docker container |
+| **HPC (SSH/SLURM)** | Access to a compute cluster | Jobs submitted via SLURM; results downloaded via SCP |
 
-### 🔌 3.1 Connection Mode
+> **Note:** The New Search tab only appears when at least one backend is detected. It is not shown on the Hugging Face web version.
+>
+> **Windows users:** The easiest setup is `docker compose up` which gives you the Local (Embedded) backend with no R installation. See [WINDOWS_DOCKER_INSTALL.md](WINDOWS_DOCKER_INSTALL.md).
 
-At the top of the New Search tab, a **connection mode toggle** lets you choose how to reach the cluster:
+### 🔌 3.1 Backend Selection
 
-- **Local (on HPC):** You are running DE-LIMP directly on the cluster head node. SLURM commands (`sbatch`, `sacct`, `scancel`) are on your PATH. File browsers work natively.
-- **Remote (SSH):** You are running DE-LIMP on your local machine (e.g., a Mac or laptop) and connecting to the HPC over SSH.
+At the top of the New Search tab, a **backend selector** lets you choose how DIA-NN runs:
+
+- **Local (Embedded):** DIA-NN is installed inside the DE-LIMP container (Docker Compose deployment). Configure threads and output directory — no other setup needed.
+- **Local (Docker):** DIA-NN runs in a separate Docker container. Configure CPU/memory limits via sliders.
+- **HPC (SSH/SLURM):** Submit to a SLURM cluster. Choose between local (on-cluster) or remote (SSH) connection mode.
 
 #### SSH Settings (Remote Mode)
 When SSH mode is selected, a connection panel appears in the SLURM Resources section:
@@ -583,10 +593,11 @@ You have multiple options to access DE-LIMP:
 * Full computational power of your machine
 * Better for large datasets or multiple analyses
 
-### 🐳 Docker Deployment
-* For IT administrators or advanced users
-* Dockerfile available in the [GitHub repository](https://github.com/bsphinney/DE-LIMP)
-* Consistent environment across platforms
+### 🐳 Docker Deployment (Windows — Recommended)
+* **No R installation required** — DE-LIMP and DIA-NN run entirely inside Docker
+* Three commands: build DIA-NN image, then `docker compose up`
+* Full step-by-step guide: [WINDOWS_DOCKER_INSTALL.md](WINDOWS_DOCKER_INSTALL.md)
+* Also works on Mac/Linux, though native R installation is easier on those platforms
 
 ---
 
