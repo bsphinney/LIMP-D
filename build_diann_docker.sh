@@ -26,7 +26,8 @@ DIANN_VERSION="${1:-2.0}"
 IMAGE_NAME="diann:${DIANN_VERSION}"
 
 # DIA-NN Linux releases are distributed as zip files on GitHub
-DIANN_URL="https://github.com/vdemichev/DiaNN/releases/download/${DIANN_VERSION}/diann-linux.zip"
+# Naming convention changed: DIA-NN-{version}-Academia-Linux.zip (2.0+)
+DIANN_URL="https://github.com/vdemichev/DiaNN/releases/download/${DIANN_VERSION}/DIA-NN-${DIANN_VERSION}-Academia-Linux.zip"
 
 echo "============================================================"
 echo "  DIA-NN Docker Image Builder for DE-LIMP"
@@ -65,18 +66,28 @@ BUILD_DIR=$(mktemp -d)
 trap "rm -rf $BUILD_DIR" EXIT
 cd "$BUILD_DIR"
 
+ZIPFILE="DIA-NN-${DIANN_VERSION}-Academia-Linux.zip"
 echo "Downloading DIA-NN ${DIANN_VERSION} Linux release..."
+echo "URL: ${DIANN_URL}"
+echo ""
 if command -v wget &> /dev/null; then
-    wget -q --show-progress "$DIANN_URL" -O diann-linux.zip
+    wget -q --show-progress "$DIANN_URL" -O "$ZIPFILE"
 elif command -v curl &> /dev/null; then
-    curl -L --progress-bar "$DIANN_URL" -o diann-linux.zip
+    curl -L --progress-bar "$DIANN_URL" -o "$ZIPFILE"
 else
     echo "ERROR: Neither wget nor curl found. Install one and retry."
     exit 1
 fi
 
+if [ ! -s "$ZIPFILE" ]; then
+    echo "ERROR: Download failed or file is empty."
+    echo "Check that version ${DIANN_VERSION} exists at:"
+    echo "  https://github.com/vdemichev/DiaNN/releases"
+    exit 1
+fi
+
 echo "Extracting..."
-unzip -q diann-linux.zip -d diann-extract
+unzip -q "$ZIPFILE" -d diann-extract
 
 # Find the diann-linux binary (may be in a subdirectory)
 DIANN_BIN=$(find diann-extract -name "diann-linux" -type f 2>/dev/null | head -1)
@@ -119,12 +130,14 @@ RUN wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh && \
 ENV DOTNET_ROOT=/usr/share/dotnet
 ENV PATH="$PATH:/usr/share/dotnet"
 
-# Copy DIA-NN binaries
+# Copy DIA-NN binaries and shared libraries
 COPY diann-bin/ /opt/diann/
 
-# Make executable and add to PATH
-RUN chmod +x /opt/diann/* 2>/dev/null || true && \
+# Make executable, add to PATH, and ensure libs are findable
+RUN chmod +x /opt/diann/diann-linux 2>/dev/null || true && \
     ln -sf /opt/diann/diann-linux /usr/local/bin/diann
+
+ENV LD_LIBRARY_PATH="/opt/diann:${LD_LIBRARY_PATH}"
 
 # Verify installation
 RUN diann --help 2>&1 | head -3 || echo "Note: diann --help returned non-zero (may be normal)"
