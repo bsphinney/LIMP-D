@@ -560,10 +560,17 @@ server_mofa <- function(input, output, session, values, add_to_log) {
       return()
     }
 
+    # Capture parameters before entering withProgress (input$ not always available inside)
+    scale_views <- isTRUE(input$mofa_scale_views)
+    auto_factors <- isTRUE(input$mofa_auto_factors)
+    num_factors <- if (auto_factors) { if (is_hf) 10 else 15 } else { input$mofa_num_factors }
+    convergence_mode <- input$mofa_convergence %||% "medium"
+    seed_val <- input$mofa_seed %||% 42
+    min_var <- input$mofa_min_variance %||% 0.01
+
     withProgress(message = "Training MOFA model...", {
 
       tryCatch({
-        library(MOFA2)
 
         # Step 1: Prepare data
         incProgress(0.1, detail = "Preparing data matrices...")
@@ -575,46 +582,50 @@ server_mofa <- function(input, output, session, values, add_to_log) {
 
         # Step 2: Create MOFA object
         incProgress(0.2, detail = "Creating MOFA object...")
-        mofa_obj <- create_mofa(mofa_data)
+        mofa_obj <- MOFA2::create_mofa(mofa_data)
 
         # Step 3: Set options
         incProgress(0.3, detail = "Configuring model options...")
 
-        data_opts <- get_default_data_options(mofa_obj)
-        data_opts$scale_views <- isTRUE(input$mofa_scale_views)
+        data_opts <- MOFA2::get_default_data_options(mofa_obj)
+        data_opts$scale_views <- scale_views
 
-        model_opts <- get_default_model_options(mofa_obj)
-        model_opts$num_factors <- if (isTRUE(input$mofa_auto_factors)) {
-          if (is_hf) 10 else 15
-        } else {
-          input$mofa_num_factors
-        }
+        model_opts <- MOFA2::get_default_model_options(mofa_obj)
+        model_opts$num_factors <- num_factors
 
-        train_opts <- get_default_training_options(mofa_obj)
-        train_opts$convergence_mode <- input$mofa_convergence
-        train_opts$seed <- input$mofa_seed %||% 42
+        train_opts <- MOFA2::get_default_training_options(mofa_obj)
+        train_opts$convergence_mode <- convergence_mode
+        train_opts$seed <- seed_val
         train_opts$verbose <- FALSE
 
-        mofa_obj <- prepare_mofa(mofa_obj,
+        mofa_obj <- MOFA2::prepare_mofa(mofa_obj,
           data_options = data_opts,
           model_options = model_opts,
           training_options = train_opts
         )
 
         # Step 4: Train
+        # CRITICAL: Always provide outfile — without it, run_mofa() can crash
+        # the R session inside Shiny because basilisk's Python process conflicts
+        # with Shiny's event loop when trying to return the model in-memory.
+        # Saving to HDF5 first, then loading back via load_model() is stable.
         incProgress(0.4, detail = "Training model (this may take several minutes)...")
-        mofa_trained <- run_mofa(mofa_obj, use_basilisk = TRUE)
+        outfile <- tempfile(fileext = ".hdf5")
+        MOFA2::run_mofa(mofa_obj, outfile = outfile, use_basilisk = TRUE)
 
-        # Step 5: Post-process
+        # Step 5: Load trained model back from HDF5
+        incProgress(0.85, detail = "Loading trained model...")
+        mofa_trained <- MOFA2::load_model(outfile)
+
+        # Step 6: Post-process
         incProgress(0.9, detail = "Extracting results...")
 
         # Drop factors below variance threshold
-        min_var <- input$mofa_min_variance %||% 0.01
         if (min_var > 0) {
-          r2 <- get_variance_explained(mofa_trained)$r2_total[[1]]
+          r2 <- MOFA2::get_variance_explained(mofa_trained)$r2_total[[1]]
           keep_factors <- names(r2)[r2 >= min_var * 100]
           if (length(keep_factors) > 0 && length(keep_factors) < length(r2)) {
-            mofa_trained <- subset_factors(mofa_trained, factors = keep_factors)
+            mofa_trained <- MOFA2::subset_factors(mofa_trained, factors = keep_factors)
             showNotification(sprintf("Dropped %d factors below %.1f%% variance threshold",
                                      length(r2) - length(keep_factors),
                                      min_var * 100), type = "message")
@@ -623,9 +634,12 @@ server_mofa <- function(input, output, session, values, add_to_log) {
 
         # Store results
         values$mofa_object <- mofa_trained
-        values$mofa_factors <- get_factors(mofa_trained)[[1]]
-        values$mofa_weights <- get_weights(mofa_trained)
-        values$mofa_variance_explained <- get_variance_explained(mofa_trained)
+        values$mofa_factors <- MOFA2::get_factors(mofa_trained)[[1]]
+        values$mofa_weights <- MOFA2::get_weights(mofa_trained)
+        values$mofa_variance_explained <- MOFA2::get_variance_explained(mofa_trained)
+
+        # Clean up temp file
+        unlink(outfile)
 
         n_factors <- ncol(values$mofa_factors)
         view_names <- names(valid_views)
@@ -635,9 +649,9 @@ server_mofa <- function(input, output, session, values, add_to_log) {
           n_samples = length(common_samples),
           n_factors = n_factors,
           view_names = view_names,
-          convergence = input$mofa_convergence,
-          scale_views = isTRUE(input$mofa_scale_views),
-          seed = input$mofa_seed %||% 42,
+          convergence = convergence_mode,
+          scale_views = scale_views,
+          seed = seed_val,
           timestamp = Sys.time()
         )
 
