@@ -37,6 +37,8 @@ DE-LIMP is a Shiny proteomics data analysis pipeline using the LIMPA R package f
 | `R/helpers_xic.R` | `detect_xic_format()`, `load_xic_for_protein()`, `reshape_xic_for_plotting()` |
 | `R/helpers_phospho.R` | `detect_phospho()`, `parse_phospho_positions()`, `extract_phosphosites()` (~210 lines) |
 | `R/server_phospho.R` | Phospho site-level DE, volcano, site table, residue dist, completeness QC (~650 lines) |
+| `R/helpers_mofa.R` | `parse_rds_for_mofa()`, `parse_matrix_file()`, `compute_sample_overlap()`, `generate_mofa_code()` (~200 lines) |
+| `R/server_mofa.R` | MOFA2 multi-view integration: view management, training, variance heatmap, weights, scores, Factor-DE correlation (~700 lines) |
 | `R/helpers_search.R` | `ssh_exec()`, `scp_download/upload()`, `build_diann_flags()`, `build_docker_command()`, `check_docker_*()`, `recover_slurm_jobs()`, `recover_docker_jobs()`, `generate_sbatch_script()`, UniProt proteome search (~1050 lines) |
 | `R/server_search.R` | Docker/HPC dual backend, SSH connection, DIA-NN search config, file browsing, job queue (submit/monitor/cancel/recover/load), SCP result download (~1750 lines) |
 | `build_diann_docker.sh` | User-facing script to build DIA-NN Docker image locally (license notice, downloads from GitHub, builds x86_64 image) |
@@ -76,6 +78,7 @@ server <- function(input, output, session) {
   server_phospho(input, output, session, values, add_to_log)
   server_search(input, output, session, values, add_to_log,
                 search_enabled, docker_available, docker_config, hpc_available, local_sbatch)
+  server_mofa(input, output, session, values, add_to_log)
   server_session(input, output, session, values, add_to_log)
 }
 ```
@@ -89,6 +92,7 @@ server <- function(input, output, session) {
 - **Reproducibility** - Code Log + Methodology sub-tabs
 - **Phosphoproteomics** - Site-level DE: Phospho Volcano, Site Table, Residue Distribution, QC Completeness (conditional on phospho detection)
 - **Gene Set Enrichment** - Ontology selector (BP/MF/CC/KEGG), Dot Plot, Enrichment Map, Ridgeplot, Results Table, per-ontology caching
+- **Multi-View Integration** - MOFA2: dynamic view cards (2-6), file upload (RDS/CSV/TSV/Parquet), sample matching, training, 5 results tabs (Variance Explained, Factor Weights, Sample Scores, Top Features, Factor-DE Correlation)
 - **New Search** - DIA-NN search: dual backend (Docker local + HPC SSH/SLURM), file selection, FASTA database (UniProt download + upload), search settings (standard/phospho), resource controls, job queue (submit/monitor/cancel/recover/load), auto-load results (conditional on search backend availability)
 - **Data Chat** - AI-powered analysis (Google Gemini API)
 - **Education** - Learning resources
@@ -119,6 +123,13 @@ server <- function(input, output, session) {
 - `values$gsea_last_org_db` - OrgDb used for cached GSEA results
 - `values$ssh_sbatch_path` - Full path to sbatch binary on remote HPC (cached from test connection)
 - `values$diann_jobs` - List of DIA-NN job entries (job_id, backend, name, status, output_dir, n_files, log_content, is_ssh, loaded, etc.)
+- `values$mofa_view_configs` - List of view config objects (id, name, type, source, matrix, status)
+- `values$mofa_views` - Named list of loaded matrices (view_name -> features x samples matrix)
+- `values$mofa_view_fits` - Optional limma fit objects from RDS imports (for Factor-DE correlation)
+- `values$mofa_object` - Trained MOFA2 model object
+- `values$mofa_factors` - Extracted factor matrix (samples x factors)
+- `values$mofa_weights` - List of weight matrices per view
+- `values$mofa_variance_explained` - Variance explained per view per factor
 
 ### LIMPA Pipeline Flow
 1. `readDIANN()` - Load DIA-NN parquet file
@@ -355,6 +366,7 @@ Current version: **v2.5.0** (2026-02-18). See [CHANGELOG.md](CHANGELOG.md) for d
 - **Phosphoproteomics Search Mode** (v2.5): DIA-NN search preset for phospho analysis — auto-configures STY modification (UniMod:21), max 3 variable mods, 2 missed cleavages, `--phospho-output` and `--report-lib-info` flags.
 - **Docker Local Backend** (v2.5): "One UI, two engines" — same search config UI for both Docker (local) and HPC (SSH/SLURM) backends. Backend detection at startup (`docker info` / `Sys.which("sbatch")`). Shared `build_diann_flags()` eliminates flag duplication. DIA-NN Docker image built separately by users via `build_diann_docker.sh` (license compliance — DIA-NN is proprietary, free for academic use, cannot be redistributed).
 - **Job Queue Recovery** (v2.5): "Recover" button queries `sacct`/`scontrol`/`docker ps -a` to repopulate lost job queue. 3-strategy log discovery for HPC (scontrol → sacct SubmitLine → find). Updates existing entries with fresh data.
+- **MOFA2 Multi-View Integration** (v2.5): Standalone tab for unsupervised integration of 2-6 data views using MOFA2. Dynamic view cards with add/remove, smart RDS parser (DE-LIMP session, limma objects, matrices, data frames), CSV/TSV/Parquet matrix upload, phospho tab integration, sample matching with overlap stats. Training with configurable factors/convergence/scaling. 5 results tabs: variance explained heatmap, factor weights browser (plotly), sample scores scatter, top features table (DT), Factor-DE correlation. Session save/load, methodology text, reproducibility logging. HF resource limits (max 10 factors, fast convergence).
 
 ## Current TODO
 
@@ -381,6 +393,23 @@ Current version: **v2.5.0** (2026-02-18). See [CHANGELOG.md](CHANGELOG.md) for d
 - [x] **Job recovery**: Recover button queries sacct (HPC) and docker ps (Docker) to repopulate lost queue
 - [x] **Load results**: SCP download for SSH jobs, direct filesystem for Docker/local, auto-load on completion
 - [ ] **End-to-end Docker testing**: Test full Docker submit → monitor → auto-load flow with real data
+
+### MOFA2 Multi-View Integration — IMPLEMENTED
+**Spec**: `MOFA2_INTEGRATION_SPEC.md`
+- [x] Dynamic view cards (2-6 views, add/remove)
+- [x] Smart RDS parser (DE-LIMP session, limma EList, MArrayLM, matrix, named list, data.frame)
+- [x] CSV/TSV/Parquet matrix upload with auto-log2 detection
+- [x] Phospho tab integration as data source
+- [x] Sample matching with overlap statistics
+- [x] MOFA training (configurable factors, convergence, scaling, seed)
+- [x] 5 results visualization tabs
+- [x] Factor-DE correlation (links MOFA factors to DE results from any view)
+- [x] Session save/load, methodology text, reproducibility logging
+- [x] HF Spaces resource limits
+- [ ] **MEFISTO integration**: Temporal/spatial MOFA for time-course experiments
+- [ ] **Factor annotation**: Link factors to GO terms based on top weights
+- [ ] **DIA-NN report processing**: Process raw DIA-NN .parquet as MOFA view via existing pipeline
+- [ ] **Dockerfile**: Add MOFA2 + basilisk to Docker image
 
 ### General
 - [ ] Grid View: Open violin plot on protein click with bar plot toggle
