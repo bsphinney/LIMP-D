@@ -19,7 +19,7 @@ server_mofa <- function(input, output, session, values, add_to_log) {
       div(style = "background: linear-gradient(135deg, #2c3e50, #3498db); color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 15px;",
         div(style = "display: flex; justify-content: space-between; align-items: center;",
           div(
-            tags$h4("Multi-View Integration (MOFA2)", style = "margin: 0;"),
+            tags$h4("Multi-Omics MOFA2", style = "margin: 0;"),
             tags$p("Unsupervised discovery of shared and view-specific variation patterns",
                    style = "margin: 5px 0 0 0; opacity: 0.9; font-size: 0.9em;")
           ),
