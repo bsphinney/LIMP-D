@@ -149,8 +149,9 @@ options(shiny.maxRequestSize = 5000 * 1024^2)  # 5 GB upload limit
 is_hf_space <- nzchar(Sys.getenv("SPACE_ID", ""))
 
 # Detect HPC mode (sbatch on PATH for local, or ssh for remote submission)
+# Disabled on Hugging Face Spaces — search tab not useful in cloud environment
 local_sbatch <- nzchar(Sys.which("sbatch"))
-hpc_mode <- local_sbatch || nzchar(Sys.which("ssh"))
+hpc_mode <- !is_hf_space && (local_sbatch || nzchar(Sys.which("ssh")))
 
 # Conditionally load HPC-only packages
 if (hpc_mode) {
