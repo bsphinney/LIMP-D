@@ -23,8 +23,12 @@ server_mofa <- function(input, output, session, values, add_to_log) {
             tags$p("Unsupervised discovery of shared and view-specific variation patterns",
                    style = "margin: 5px 0 0 0; opacity: 0.9; font-size: 0.9em;")
           ),
-          actionButton("mofa_info_btn", icon("question-circle"),
-                       class = "btn-outline-light btn-sm", title = "About MOFA")
+          div(style = "display: flex; gap: 8px; align-items: center;",
+            actionButton("load_mofa_example", "Load Test Data",
+                         class = "btn-info btn-sm", icon = icon("download")),
+            actionButton("mofa_info_btn", icon("question-circle"),
+                         class = "btn-outline-light btn-sm", title = "About MOFA")
+          )
         )
       ),
 
@@ -878,7 +882,13 @@ server_mofa <- function(input, output, session, values, add_to_log) {
     factors_df$Sample <- rownames(factors_df)
 
     # Add group coloring from metadata
-    if (!is.null(values$metadata) && "Run" %in% names(values$metadata) && "Group" %in% names(values$metadata)) {
+    # Try MOFA-specific metadata first (from test data), then main DE pipeline metadata
+    if (!is.null(values$mofa_sample_metadata) && "Sample" %in% names(values$mofa_sample_metadata) &&
+        "Group" %in% names(values$mofa_sample_metadata)) {
+      factors_df <- merge(factors_df, values$mofa_sample_metadata[, c("Sample", "Group")],
+                          by = "Sample", all.x = TRUE)
+    } else if (!is.null(values$metadata) && "Run" %in% names(values$metadata) &&
+               "Group" %in% names(values$metadata)) {
       factors_df <- merge(factors_df, values$metadata[, c("Run", "Group")],
                           by.x = "Sample", by.y = "Run", all.x = TRUE)
     } else {
@@ -1201,4 +1211,116 @@ server_mofa <- function(input, output, session, values, add_to_log) {
       write.csv(combined, file, row.names = FALSE)
     }
   )
+
+  # ============================================================================
+  #      Load MOFA Test Data (Mouse Brain Proteomics + Phosphoproteomics)
+  # ============================================================================
+
+  observeEvent(input$load_mofa_example, {
+    withProgress(message = "Loading MOFA test data...", {
+
+      base_url <- "https://github.com/bsphinney/DE-LIMP/releases/download/v1.0"
+      prot_url   <- paste0(base_url, "/proteomics.csv")
+      phospho_url <- paste0(base_url, "/phospho.csv")
+      meta_url   <- paste0(base_url, "/metadata.csv")
+
+      tryCatch({
+        # Download files
+        incProgress(0.1, detail = "Downloading proteomics...")
+        prot_tmp <- tempfile(fileext = ".csv")
+        curl::curl_download(prot_url, prot_tmp, quiet = TRUE)
+
+        incProgress(0.3, detail = "Downloading phosphoproteomics...")
+        phospho_tmp <- tempfile(fileext = ".csv")
+        curl::curl_download(phospho_url, phospho_tmp, quiet = TRUE)
+
+        incProgress(0.5, detail = "Downloading metadata...")
+        meta_tmp <- tempfile(fileext = ".csv")
+        curl::curl_download(meta_url, meta_tmp, quiet = TRUE)
+
+        # Parse matrices
+        incProgress(0.6, detail = "Loading matrices...")
+        prot_df <- read.csv(prot_tmp, row.names = 1, check.names = FALSE)
+        prot_mat <- as.matrix(prot_df)
+
+        phospho_df <- read.csv(phospho_tmp, row.names = 1, check.names = FALSE)
+        phospho_mat <- as.matrix(phospho_df)
+
+        meta_df <- read.csv(meta_tmp, stringsAsFactors = FALSE)
+
+        # Build group labels from metadata (Sex_Treatment)
+        if (all(c("Sex", "Treatment") %in% names(meta_df))) {
+          meta_df$Group <- paste(meta_df$Sex, meta_df$Treatment, sep = "_")
+        }
+
+        incProgress(0.8, detail = "Configuring views...")
+
+        # Store as MOFA views
+        values$mofa_views[["Global Proteomics"]] <- prot_mat
+        values$mofa_views[["Phosphoproteomics"]] <- phospho_mat
+
+        # Store metadata for sample score coloring
+        values$mofa_sample_metadata <- meta_df
+
+        # Build view configs
+        values$mofa_view_configs <- list(
+          list(
+            id = "v1",
+            num = 1,
+            name = "Global Proteomics",
+            type = "proteomics_other",
+            source = "example",
+            matrix = prot_mat,
+            fit = NULL,
+            n_features = nrow(prot_mat),
+            n_samples = ncol(prot_mat),
+            status = "ready"
+          ),
+          list(
+            id = "v2",
+            num = 2,
+            name = "Phosphoproteomics",
+            type = "phospho",
+            source = "example",
+            matrix = phospho_mat,
+            fit = NULL,
+            n_features = nrow(phospho_mat),
+            n_samples = ncol(phospho_mat),
+            status = "ready"
+          )
+        )
+
+        # Clear any previous MOFA results
+        values$mofa_object <- NULL
+        values$mofa_factors <- NULL
+        values$mofa_weights <- list()
+        values$mofa_variance_explained <- NULL
+        values$mofa_last_run_params <- NULL
+        values$mofa_view_fits <- list()
+
+        showNotification(
+          sprintf(paste0(
+            "MOFA test data loaded!\n",
+            "View 1: Global Proteomics (%d proteins x %d samples)\n",
+            "View 2: Phosphoproteomics (%d sites x %d samples)\n",
+            "Design: %s"),
+            nrow(prot_mat), ncol(prot_mat),
+            nrow(phospho_mat), ncol(phospho_mat),
+            paste(names(table(meta_df$Group)), collapse = ", ")),
+          type = "message", duration = 8
+        )
+
+        add_to_log("Load MOFA Test Data", c(
+          "# Mouse brain proteomics + phosphoproteomics test dataset",
+          sprintf("# View 1: Global Proteomics (%d x %d)", nrow(prot_mat), ncol(prot_mat)),
+          sprintf("# View 2: Phosphoproteomics (%d x %d)", nrow(phospho_mat), ncol(phospho_mat)),
+          sprintf("# Groups: %s", paste(names(table(meta_df$Group)), collapse = ", "))
+        ))
+
+      }, error = function(e) {
+        showNotification(paste("Error loading test data:", e$message),
+                         type = "error", duration = 10)
+      })
+    })
+  })
 }

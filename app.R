@@ -289,6 +289,7 @@ server <- function(input, output, session) {
     mofa_view_configs = list(),
     mofa_views = list(),
     mofa_view_fits = list(),
+    mofa_sample_metadata = NULL,
     mofa_object = NULL,
     mofa_factors = NULL,
     mofa_weights = list(),

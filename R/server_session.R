@@ -295,6 +295,7 @@ server_session <- function(input, output, session, values, add_to_log) {
         mofa_view_configs = values$mofa_view_configs,
         mofa_views = values$mofa_views,
         mofa_view_fits = values$mofa_view_fits,
+        mofa_sample_metadata = values$mofa_sample_metadata,
         mofa_object = values$mofa_object,
         mofa_factors = values$mofa_factors,
         mofa_weights = values$mofa_weights,
@@ -374,6 +375,7 @@ server_session <- function(input, output, session, values, add_to_log) {
         values$mofa_view_configs <- session_data$mofa_view_configs %||% list()
         values$mofa_views <- session_data$mofa_views %||% list()
         values$mofa_view_fits <- session_data$mofa_view_fits %||% list()
+        values$mofa_sample_metadata <- session_data$mofa_sample_metadata
         values$mofa_object <- session_data$mofa_object
         values$mofa_factors <- session_data$mofa_factors
         values$mofa_weights <- session_data$mofa_weights
