@@ -1188,6 +1188,11 @@ build_ui <- function(is_hf_space, search_enabled = FALSE,
               )
     ),
 
+    nav_panel("Multi-View Integration", icon = icon("layer-group"),
+              value = "mofa_tab",
+              uiOutput("mofa_tab_content")
+    ),
+
     nav_panel("Data Chat", icon = icon("comments"),
               card(
                 card_header(div(style="display: flex; justify-content: space-between; align-items: center;",

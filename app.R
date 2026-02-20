@@ -94,7 +94,7 @@ required_pkgs <- c("shiny", "bslib", "readr", "tibble", "dplyr", "tidyr",
                    "ComplexHeatmap", "shinyjs", "plotly", "stringr", "limma",
                    "clusterProfiler", "AnnotationDbi", "org.Hs.eg.db", "org.Mm.eg.db",
                    "enrichplot", "ggridges", "ggrepel", "markdown", "curl",
-                   "KSEAapp", "ggseqlogo")
+                   "KSEAapp", "ggseqlogo", "MOFA2")
 
 # Only install truly missing packages (don't update already-loaded packages)
 missing_pkgs <- character(0)
@@ -284,7 +284,16 @@ server <- function(input, output, session) {
     fasta_info = NULL,
     ssh_connected = FALSE,
     diann_search_settings = NULL,
-    docker_available = docker_available
+    docker_available = docker_available,
+    # Multi-View Integration (MOFA2)
+    mofa_view_configs = list(),
+    mofa_views = list(),
+    mofa_view_fits = list(),
+    mofa_object = NULL,
+    mofa_factors = NULL,
+    mofa_weights = list(),
+    mofa_variance_explained = NULL,
+    mofa_last_run_params = NULL
   )
 
   # --- Shared helper: append to reproducibility log ---
@@ -306,6 +315,7 @@ server <- function(input, output, session) {
   server_search(input, output, session, values, add_to_log,
                 search_enabled, docker_available, docker_config, hpc_available, local_sbatch,
                 local_diann, delimp_data_dir)
+  server_mofa(input, output, session, values, add_to_log)
   server_session(input, output, session, values, add_to_log)
 }
 

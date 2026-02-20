@@ -291,6 +291,15 @@ server_session <- function(input, output, session, values, add_to_log) {
         diann_jobs = values$diann_jobs,
         diann_fasta_files = values$diann_fasta_files,
         fasta_info = values$fasta_info,
+        # MOFA2 Multi-View Integration
+        mofa_view_configs = values$mofa_view_configs,
+        mofa_views = values$mofa_views,
+        mofa_view_fits = values$mofa_view_fits,
+        mofa_object = values$mofa_object,
+        mofa_factors = values$mofa_factors,
+        mofa_weights = values$mofa_weights,
+        mofa_variance_explained = values$mofa_variance_explained,
+        mofa_last_run_params = values$mofa_last_run_params,
         # Save timestamp & version
         saved_at   = Sys.time(),
         app_version = "DE-LIMP v2.5"
@@ -359,6 +368,18 @@ server_session <- function(input, output, session, values, add_to_log) {
       values$diann_jobs <- session_data$diann_jobs %||% list()
       values$diann_fasta_files <- session_data$diann_fasta_files %||% character()
       values$fasta_info <- session_data$fasta_info
+
+      # MOFA2 Multi-View Integration
+      if (!is.null(session_data$mofa_object)) {
+        values$mofa_view_configs <- session_data$mofa_view_configs %||% list()
+        values$mofa_views <- session_data$mofa_views %||% list()
+        values$mofa_view_fits <- session_data$mofa_view_fits %||% list()
+        values$mofa_object <- session_data$mofa_object
+        values$mofa_factors <- session_data$mofa_factors
+        values$mofa_weights <- session_data$mofa_weights
+        values$mofa_variance_explained <- session_data$mofa_variance_explained
+        values$mofa_last_run_params <- session_data$mofa_last_run_params
+      }
 
       # Restore repro log and append load event
       values$repro_log  <- session_data$repro_log %||% values$repro_log
@@ -576,8 +597,24 @@ server_session <- function(input, output, session, values, add_to_log) {
       "    \u2022 Positive NES: Gene set enriched in up-regulated proteins\n",
       "    \u2022 Negative NES: Gene set enriched in down-regulated proteins\n\n\n",
 
+      if (!is.null(values$mofa_object)) paste(
+        "7. MULTI-OMICS FACTOR ANALYSIS (MOFA2)\n",
+        "Unsupervised multi-view integration was performed using MOFA2 (Multi-Omics Factor\n",
+        "Analysis v2). MOFA2 identifies latent factors that capture the major sources of variation\n",
+        "across data views, enabling deconvolution of shared vs view-specific biology.\n\n",
+        sprintf("  Views: %d\n", values$mofa_last_run_params$n_views %||% 0),
+        sprintf("  Common samples: %d\n", values$mofa_last_run_params$n_samples %||% 0),
+        sprintf("  Active factors: %d\n", values$mofa_last_run_params$n_factors %||% 0),
+        sprintf("  Convergence mode: %s\n", values$mofa_last_run_params$convergence %||% "medium"),
+        sprintf("  Scale views: %s\n", values$mofa_last_run_params$scale_views %||% TRUE),
+        sprintf("  Random seed: %d\n\n", values$mofa_last_run_params$seed %||% 42),
+        "  Reference: Argelaguet R, et al. (2020) MOFA+: a statistical framework for\n",
+        "  comprehensive integration of multi-modal single-cell data. Genome Biology 21:111.\n\n\n",
+        sep = ""
+      ) else "",
+
       if (!is.null(values$phospho_fit)) paste(
-        "7. PHOSPHOSITE-LEVEL DIFFERENTIAL EXPRESSION\n",
+        "8. PHOSPHOSITE-LEVEL DIFFERENTIAL EXPRESSION\n",
         "Unlike standard proteomics where peptides are aggregated to proteins, phosphoproteomics\n",
         "requires site-level analysis because a single protein can harbour dozens of independently\n",
         "regulated phosphorylation sites. DE-LIMP implements site-level DE in a dedicated pipeline\n",
@@ -653,7 +690,7 @@ server_session <- function(input, output, session, values, add_to_log) {
         "     Reference: Olsen JV et al. (2006) Global, in vivo, and site-specific\n",
         "     phosphorylation dynamics in signaling networks. Cell 127:635-648.\n\n\n",
 
-        "8. KINASE-SUBSTRATE ENRICHMENT ANALYSIS (KSEA)\n",
+        "9. KINASE-SUBSTRATE ENRICHMENT ANALYSIS (KSEA)\n",
         "KSEA infers upstream kinase activity from the phosphosite fold-changes in your data,\n",
         "analogous to gene set enrichment but for kinase-substrate relationships.\n\n",
 
@@ -689,7 +726,7 @@ server_session <- function(input, output, session, values, add_to_log) {
         "     Wiredja DD et al. (2017) The KSEA App: a web-based tool for kinase activity\n",
         "     inference from quantitative phosphoproteomics. Bioinformatics 33:3489-3491.\n\n\n",
 
-        "9. SEQUENCE MOTIF ANALYSIS (Optional)\n",
+        "10. SEQUENCE MOTIF ANALYSIS (Optional)\n",
         "Sequence logos reveal enriched amino acid motifs around regulated phosphosites,\n",
         "which can suggest the kinase families responsible for observed phosphorylation changes.\n\n",
 
@@ -710,7 +747,7 @@ server_session <- function(input, output, session, values, add_to_log) {
         "     the identification of protein phosphorylation motifs from large-scale data sets.\n",
         "     Nature Biotechnology 23:1391-1398.\n\n\n",
 
-        "10. PHOSPHOSITE ANNOTATION (Optional)\n",
+        "11. PHOSPHOSITE ANNOTATION (Optional)\n",
         "Each phosphosite is annotated as Known (previously reported) or Novel by querying:\n",
         "  - UniProt REST API: Curated 'Modified residue' features with evidence codes\n",
         "    (ECO:0000269 = published experiment, ECO:0007744 = large-scale study)\n",
@@ -733,6 +770,10 @@ server_session <- function(input, output, session, values, add_to_log) {
       "Visualization: ggplot2, ComplexHeatmap, plotly\n",
       "Enrichment: clusterProfiler (gseGO, gseKEGG), enrichplot\n",
       "Annotation DBs: org.Hs.eg.db, org.Mm.eg.db (auto-detected)\n",
+      if (!is.null(values$mofa_object)) paste(
+        "Multi-view integration: MOFA2 (Bioconductor), basilisk (Python env management)\n",
+        sep = ""
+      ) else "",
       if (!is.null(values$phospho_fit)) paste(
         "Phosphoproteomics: KSEAapp (kinase activity inference), ggseqlogo (motif analysis)\n",
         "Phosphosite databases: PhosphoSitePlus (via KSEAapp), UniProt REST API\n",
@@ -752,6 +793,10 @@ server_session <- function(input, output, session, values, add_to_log) {
       "\u2022 clusterProfiler: Yu G, et al. (2012) OMICS 16(5):284-287\n",
       "\u2022 GSEA method: Subramanian A, et al. (2005) PNAS 102(43):15545-15550\n",
       "\u2022 KEGG database: Kanehisa M, Goto S (2000) Nucleic Acids Research 28(1):27-30\n",
+      if (!is.null(values$mofa_object)) paste(
+        "\u2022 MOFA2: Argelaguet R, et al. (2020) Genome Biology 21:111\n",
+        sep = ""
+      ) else "",
       if (!is.null(values$phospho_fit)) paste(
         "\u2022 Perseus imputation: Tyanova S, et al. (2016) Nature Methods 13:731-740\n",
         "\u2022 Phosphoproteome dynamics: Olsen JV, et al. (2006) Cell 127:635-648\n",
