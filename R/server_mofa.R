@@ -766,17 +766,16 @@ server_mofa <- function(input, output, session, values, add_to_log) {
 
     r2 <- values$mofa_variance_explained$r2_per_factor
 
-    # Build data frame from nested list
+    # r2_per_factor is a list of groups, each a matrix (factors x views)
     var_list <- list()
     for (group_name in names(r2)) {
-      group_data <- r2[[group_name]]
-      for (view_name in names(group_data)) {
-        vals <- group_data[[view_name]]
-        for (factor_name in names(vals)) {
+      mat <- r2[[group_name]]
+      for (i in seq_len(nrow(mat))) {
+        for (j in seq_len(ncol(mat))) {
           var_list[[length(var_list) + 1]] <- data.frame(
-            View = view_name,
-            Factor = factor_name,
-            Variance = vals[[factor_name]],
+            View = colnames(mat)[j],
+            Factor = rownames(mat)[i],
+            Variance = mat[i, j],
             stringsAsFactors = FALSE
           )
         }
@@ -785,6 +784,11 @@ server_mofa <- function(input, output, session, values, add_to_log) {
 
     if (length(var_list) == 0) return(NULL)
     var_df <- do.call(rbind, var_list)
+
+    # Preserve natural factor order (Factor1, Factor2, ...)
+    factor_levels <- unique(var_df$Factor)
+    factor_levels <- factor_levels[order(as.integer(gsub("\\D+", "", factor_levels)))]
+    var_df$Factor <- factor(var_df$Factor, levels = factor_levels)
 
     ggplot(var_df, aes(x = Factor, y = View, fill = Variance)) +
       geom_tile(color = "white", linewidth = 0.5) +
@@ -1008,15 +1012,28 @@ server_mofa <- function(input, output, session, values, add_to_log) {
   # ============================================================================
 
   output$mofa_de_controls <- renderUI({
-    req(values$mofa_weights, values$fit)
+    req(values$mofa_weights)
 
-    contrast_names <- colnames(values$fit$contrasts)
+    # Check if any fit object is available (main pipeline or imported from RDS views)
+    has_main_fit <- !is.null(values$fit) && !is.null(values$fit$contrasts)
+    has_view_fits <- any(sapply(values$mofa_view_fits, function(f) !is.null(f)))
 
-    # Collect fit objects from all views
-    fits_available <- c("View 1 (current)" = "current")
+    if (!has_main_fit && !has_view_fits) {
+      return(div(class = "alert alert-info mt-3",
+        icon("info-circle"),
+        "Factor-DE correlation requires differential expression results. ",
+        "Run the DE pipeline on your data first (Data Overview tab), or ",
+        "upload a DE-LIMP session (.rds) as one of your MOFA views to include its fit object."
+      ))
+    }
+
+    # Collect all available fit objects
+    fits_available <- character()
+    if (has_main_fit) {
+      fits_available <- c("Main DE pipeline" = "current")
+    }
     for (vid in names(values$mofa_view_fits)) {
       if (!is.null(values$mofa_view_fits[[vid]])) {
-        # Find view name
         for (vc in values$mofa_view_configs) {
           if (vc$id == vid) {
             fits_available[vc$name] <- vid
@@ -1025,6 +1042,10 @@ server_mofa <- function(input, output, session, values, add_to_log) {
         }
       }
     }
+
+    # Get contrast names from first available fit
+    first_fit <- if (has_main_fit) values$fit else values$mofa_view_fits[[names(which(sapply(values$mofa_view_fits, function(f) !is.null(f))))[1]]]
+    contrast_names <- colnames(first_fit$contrasts)
 
     div(class = "mb-3",
       fluidRow(
