@@ -27,7 +27,7 @@ server_mofa <- function(input, output, session, values, add_to_log) {
             actionButton("load_mofa_example", "Mouse Brain (2-view)",
                          class = "btn-info btn-sm", icon = icon("download")),
             actionButton("load_mofa_tcga", "TCGA Breast (3-view)",
-                         class = "btn-outline-info btn-sm", icon = icon("download")),
+                         class = "btn-info btn-sm", icon = icon("download")),
             actionButton("mofa_info_btn", icon("question-circle"),
                          class = "btn-outline-light btn-sm", title = "About MOFA")
           )
