@@ -14,7 +14,7 @@
 
 ---
 
-## ✨ What's New in v2.5
+## ✨ What's New in v3.0
 
 **🧬 GSEA Expansion**:
 - 4 enrichment databases: GO Biological Process, Molecular Function, Cellular Component, and KEGG Pathways

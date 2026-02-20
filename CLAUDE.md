@@ -348,7 +348,7 @@ HF Docker builds take 5-10 min (cached) or 30-45 min (Dockerfile changes). Alway
 
 ## Version History
 
-Current version: **v2.5.0** (2026-02-18). See [CHANGELOG.md](CHANGELOG.md) for detailed release history.
+Current version: **v3.0.0** (2026-02-20). See [CHANGELOG.md](CHANGELOG.md) for detailed release history.
 
 ### Key Architecture Decisions (for context)
 - **Modularization** (v2.3): Split 5,139-line monolith into `app.R` orchestrator + 12 `R/` module files. Each server module receives `(input, output, session, values, ...)`. `app.R` explicitly sources `R/` for compatibility with both `runApp('.')` and `runApp('app.R')`.
@@ -364,9 +364,9 @@ Current version: **v2.5.0** (2026-02-18). See [CHANGELOG.md](CHANGELOG.md) for d
 - **AI Summary All-Contrasts** (v2.5): Loops over all `colnames(values$fit$contrasts)`, computes cross-comparison biomarkers (significant in >=2 contrasts), scales token budget by contrast count (30/20/10 top proteins).
 - **SSH Remote Job Submission** (v2.5): Run DE-LIMP on local Mac, submit DIA-NN searches to remote HPC via SSH. Non-blocking job queue (submit multiple, continue using app). `ssh_exec()` single chokepoint, full SLURM path caching after connection test, `processx::run()` timeouts, SCP for file transfer. No new R packages (uses system `ssh`/`scp`).
 - **Phosphoproteomics Search Mode** (v2.5): DIA-NN search preset for phospho analysis — auto-configures STY modification (UniMod:21), max 3 variable mods, 2 missed cleavages, `--phospho-output` and `--report-lib-info` flags.
-- **Docker Local Backend** (v2.5): "One UI, two engines" — same search config UI for both Docker (local) and HPC (SSH/SLURM) backends. Backend detection at startup (`docker info` / `Sys.which("sbatch")`). Shared `build_diann_flags()` eliminates flag duplication. DIA-NN Docker image built separately by users via `build_diann_docker.sh` (license compliance — DIA-NN is proprietary, free for academic use, cannot be redistributed).
+- **Docker Local Backend** (v3.0): "One UI, two engines" — same search config UI for both Docker (local) and HPC (SSH/SLURM) backends. Backend detection at startup (`docker info` / `Sys.which("sbatch")`). Shared `build_diann_flags()` eliminates flag duplication. DIA-NN Docker image built separately by users via `build_diann_docker.sh` (license compliance — DIA-NN is proprietary, free for academic use, cannot be redistributed).
 - **Job Queue Recovery** (v2.5): "Recover" button queries `sacct`/`scontrol`/`docker ps -a` to repopulate lost job queue. 3-strategy log discovery for HPC (scontrol → sacct SubmitLine → find). Updates existing entries with fresh data.
-- **MOFA2 Multi-View Integration** (v2.5): Standalone tab for unsupervised integration of 2-6 data views using MOFA2. Dynamic view cards with add/remove, smart RDS parser (DE-LIMP session, limma objects, matrices, data frames), CSV/TSV/Parquet matrix upload, phospho tab integration, sample matching with overlap stats. Training with configurable factors/convergence/scaling. 5 results tabs: variance explained heatmap, factor weights browser (plotly), sample scores scatter, top features table (DT), Factor-DE correlation. Session save/load, methodology text, reproducibility logging. HF resource limits (max 10 factors, fast convergence).
+- **MOFA2 Multi-View Integration** (v3.0): Standalone tab for unsupervised integration of 2-6 data views using MOFA2. Dynamic view cards with add/remove, smart RDS parser (DE-LIMP session, limma objects, matrices, data frames), CSV/TSV/Parquet matrix upload, phospho tab integration, sample matching with overlap stats. Training with configurable factors/convergence/scaling. 5 results tabs: variance explained heatmap, factor weights browser (plotly), sample scores scatter, top features table (DT), Factor-DE correlation. Session save/load, methodology text, reproducibility logging. HF resource limits (max 10 factors, fast convergence).
 
 ## Current TODO
 

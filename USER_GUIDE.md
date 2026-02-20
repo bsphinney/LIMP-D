@@ -4,7 +4,7 @@ Welcome to **DE-LIMP** (Differential Expression & Limpa Proteomics), your intera
 
 ---
 
-## ✨ What's New in v2.5 (February 2026)
+## ✨ What's New in v3.0 (February 2026)
 
 ### GSEA Expansion
 - **Four gene-set databases**: Biological Process (BP), Molecular Function (MF), Cellular Component (CC), and KEGG pathways

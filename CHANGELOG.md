@@ -5,6 +5,49 @@ All notable changes to DE-LIMP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-02-20
+
+### Added
+- **Multi-Omics MOFA2 Integration**:
+  - New **Multi-Omics MOFA2** tab for unsupervised integration of 2-6 data views using MOFA2
+  - Dynamic view cards: add/remove views, smart RDS parser (DE-LIMP sessions, limma EList/MArrayLM, matrices, data frames)
+  - CSV/TSV/Parquet matrix upload with auto-log2 detection
+  - Phospho tab integration as data source
+  - Sample matching with overlap statistics and color-coded status
+  - MOFA training via `callr::r()` subprocess (isolates basilisk/Python from Shiny's event loop)
+  - 5 results tabs: Variance Explained heatmap, Factor Weights browser (plotly), Sample Scores scatter, Top Features table (DT), Factor-DE Correlation
+  - **Mouse Brain example dataset** (2-view): proteomics + phosphoproteomics, 16 samples
+  - **TCGA Breast Cancer example dataset** (3-view): mRNA + miRNA + protein, 150 samples, 3 subtypes
+  - Session save/load, methodology text, reproducibility logging
+  - New packages: `MOFA2`, `basilisk`, `callr`
+
+- **DIA-NN Docker Local Backend**:
+  - `Dockerfile.search`: Multi-stage build embeds DIA-NN binaries from user's pre-built `diann:2.0` image into DE-LIMP container
+  - `docker-compose.yml`: One-command deployment (`docker compose up`) with data volume mounts
+  - DIA-NN runs inside the container as a background process — no Docker-in-Docker required
+  - Windows Docker Desktop support: intermediate files written to container-internal `/tmp` to avoid FUSE layer issues with large speclib writes
+  - `build_diann_docker.sh` / `build_diann_docker.ps1`: User-facing scripts to build DIA-NN image (license compliance)
+
+- **Windows Docker Deployment**:
+  - `WINDOWS_DOCKER_INSTALL.md`: Step-by-step guide for Windows users (Docker Desktop + WSL2)
+  - Zero R installation required — everything runs in Docker
+  - `MACOS_DOCKER_INSTALL.md` and `LINUX_DOCKER_INSTALL.md`: Platform-specific guides
+
+### Changed
+- `R/ui.R`: Renamed "Multi-View Integration" tab to "Multi-Omics MOFA2"
+- `R/helpers_search.R`: Docker command uses `--entrypoint sh -c` wrapper to write intermediate files to `/tmp/diann_work` then copy final outputs to mounted volume
+- `Dockerfile` and `Dockerfile.search`: Added MOFA2, basilisk, callr packages; pre-initialize basilisk Python env at build time
+- `docs/index.html`: Comprehensive update for v3.0 features, deployment options, corrected Getting Started
+- `README_GITHUB.md`, `README_HF.md`, `USER_GUIDE.md`: Added MOFA2 documentation, fixed Quick Start
+- App version bumped to v3.0
+
+### Fixed
+- **R session crash during MOFA2 training**: basilisk's Python subprocess conflicts with Shiny's httpuv event loop. Fixed by running entire MOFA pipeline in isolated subprocess via `callr::r()`
+- **Variance Explained heatmap empty**: `r2_per_factor` is a matrix (factors × views), not a nested named list. Fixed iteration logic.
+- **Factor-DE Correlation tab blank**: Controls required `values$fit` which is NULL when using test data. Now shows info message when no DE results available.
+- **Docker DIA-NN "Could not save" on Windows**: Large intermediate `.predicted.speclib` files fail on Windows Docker FUSE layer. Fixed by writing to container-internal `/tmp` then copying final outputs.
+- **Variance explained download handler**: Same matrix iteration bug as the heatmap render.
+
 ## [2.5.0] - 2026-02-18
 
 ### Added

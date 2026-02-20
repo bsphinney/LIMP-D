@@ -14,7 +14,7 @@
 
 ---
 
-## ✨ What's New in v2.5
+## ✨ What's New in v3.0
 
 **🧬 GSEA Expansion**:
 - 4 enrichment databases: GO Biological Process, Molecular Function, Cellular Component, and KEGG Pathways
@@ -31,6 +31,19 @@
 **🤖 AI Summary — All Comparisons**:
 - Analyzes all contrasts simultaneously with cross-comparison biomarker detection
 - Biological insights on high-confidence candidates
+
+**🔬 DIA-NN HPC Search Integration**:
+- Submit DIA-NN database searches to an HPC cluster directly from DE-LIMP via SSH
+- Non-blocking job queue — submit multiple searches and continue using the app
+- Results auto-load when complete, search parameters captured in Methodology tab
+- UniProt FASTA download, 6 contaminant libraries, and phosphoproteomics search mode built in
+
+**🧬 Multi-Omics MOFA2**:
+- Unsupervised integration of 2-6 data views using MOFA2 (Multi-Omics Factor Analysis)
+- Smart data import: RDS (DE-LIMP sessions, limma objects), CSV, TSV, Parquet with auto-log2 detection
+- Variance explained heatmap, factor weights browser, sample scores scatter, top features table
+- Factor-DE correlation links MOFA factors to differential expression results
+- Built-in example datasets: Mouse Brain (2-view proteomics+phospho) and TCGA Breast Cancer (3-view mRNA+miRNA+protein)
 
 **🗺️ MDS Plot Coloring**: Color by Group, Batch, or covariates
 **📦 Complete Dataset Export**: Download all contrasts + expression + metadata
@@ -95,6 +108,27 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 - **Motif Analysis** - Sequence logo visualization for regulated phosphosites
 - **Abundance Correction** - Protein-level correction to isolate stoichiometry changes
 
+### 🧬 Multi-Omics Integration (MOFA2)
+- **2-6 data views** — Combine proteomics, phosphoproteomics, transcriptomics, metabolomics, etc.
+- **Smart RDS parser** — Import DE-LIMP sessions, limma EList/MArrayLM objects, or plain matrices
+- **Sample matching** — Automatic intersection of samples across views with overlap statistics
+- **5 results tabs** — Variance Explained heatmap, Factor Weights browser, Sample Scores scatter, Top Features table, Factor-DE Correlation
+- **Example datasets** — Mouse Brain (proteomics + phospho) and TCGA Breast Cancer (mRNA + miRNA + protein)
+- **Session save/load** — MOFA results persist across sessions; methodology auto-generated
+
+### 🔬 DIA-NN Search Integration
+- **Three backends** - Local (embedded), Docker, and HPC (SSH/SLURM) — choose what fits your setup
+- **Windows Docker Deployment** - `docker compose up` runs DE-LIMP + DIA-NN with zero R installation. See [WINDOWS_DOCKER_INSTALL.md](WINDOWS_DOCKER_INSTALL.md)
+- **HPC Search Submission** - Submit DIA-NN database searches to a remote HPC cluster via SSH without leaving DE-LIMP
+- **Non-Blocking Job Queue** - Submit multiple searches and continue using the app; results auto-load when complete
+- **UniProt FASTA Download** - Search and download proteome databases directly from UniProt (one-per-gene, reviewed, full, isoforms)
+- **Contaminant Libraries** - 6 curated contaminant FASTA libraries bundled (Universal, Cell Culture, Mouse/Rat Tissue, Neuron Culture, Stem Cell Culture)
+- **Phosphoproteomics Mode** - Auto-configures DIA-NN for phospho analysis (STY modification, max 3 var mods, `--phospho-output`)
+- **Methodology Capture** - Search parameters automatically added to the Methodology tab for publication-ready methods
+- **Job Queue Persistence** - Queue survives app restarts; active jobs resume polling automatically
+
+> **DIA-NN License:** DIA-NN is developed by [Vadim Demichev](https://github.com/vdemichev/DiaNN) and is free for academic/non-commercial use. It is **not open source and cannot be redistributed**. DE-LIMP does not bundle DIA-NN — the included build scripts download it directly from the official GitHub release and build a local Docker image on your machine. See the [DIA-NN license](https://github.com/vdemichev/DiaNN/blob/master/LICENSE.md) for full terms.
+
 ### 🎓 Education Tab
 - Embedded proteomics resources and training materials
 - Latest UC Davis Proteomics YouTube videos
@@ -103,30 +137,39 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ---
 
-## 🚀 Deployment & Access
+## 🚀 Which Installation Should I Use?
 
-**DE-LIMP is available in three ways:**
+| Platform | Recommended Method | DIA-NN Search? | Guide |
+|----------|-------------------|----------------|-------|
+| **Any (just exploring)** | Web browser | No | [Hugging Face](https://huggingface.co/spaces/brettsp/de-limp-proteomics) |
+| **Windows** | Docker Compose | Yes (embedded) | [WINDOWS_DOCKER_INSTALL.md](WINDOWS_DOCKER_INSTALL.md) |
+| **Mac** | R/RStudio (native) | Via HPC or Docker | See [Installation](#-installation) below |
+| **Linux** | R/RStudio (native) | Via HPC or Docker | See [Installation](#-installation) below |
+| **HPC cluster** | Apptainer/Singularity | Via SLURM | [HPC_DEPLOYMENT.md](HPC_DEPLOYMENT.md) |
 
-### 🌐 Web Access (No Installation Required)
+### 🌐 Web Access (No Installation)
 **Try it now:** [huggingface.co/spaces/brettsp/de-limp-proteomics](https://huggingface.co/spaces/brettsp/de-limp-proteomics)
-- Run directly in your browser
-- No R installation needed
-- Perfect for quick analyses and exploring features
-- Note: Limited computational resources compared to local installation
+- Run directly in your browser — no R, no Docker, nothing to install
+- Perfect for exploring features or quick analyses with small datasets
+- Note: No DIA-NN search capability; limited computational resources
 
-### 💻 Local Installation (Recommended for Regular Use)
-- Full computational power of your machine
-- Better for large datasets and multiple analyses
-- See Installation section below for setup instructions
-- Download from: [GitHub Releases](https://github.com/bsphinney/DE-LIMP/releases)
+### 🐳 Docker Compose (Windows)
+- **No R installation required** — DE-LIMP and DIA-NN both run inside Docker
+- Build DIA-NN image once, then `docker compose up` — that's it
+- Full step-by-step guide: **[WINDOWS_DOCKER_INSTALL.md](WINDOWS_DOCKER_INSTALL.md)**
 
-### 🖥️ HPC Deployment (High-Performance Computing)
-- Deploy on cluster environments (SLURM, PBS, etc.)
-- Use Apptainer/Singularity containers
-- Three deployment options including direct pull from Hugging Face
+> R package installation on Windows is notoriously difficult. Docker sidesteps this entirely.
+
+### 💻 Native R Installation (Mac / Linux)
+- Install R 4.5+ and run `shiny::runApp()` — all packages auto-install on first launch
+- Full computational power of your machine, best performance
+- For DIA-NN searches: connect to an HPC cluster via SSH, or install Docker for local searches
+- See [Installation](#-installation) section below
+
+### 🖥️ HPC Deployment
+- Deploy on cluster environments (SLURM, PBS, etc.) using Apptainer/Singularity
+- **SSH Remote Submission** — Run DE-LIMP on your laptop and submit DIA-NN searches to the cluster
 - Full guide: [HPC_DEPLOYMENT.md](HPC_DEPLOYMENT.md)
-
-> **Note for Developers:** This repository is deployed to both GitHub (source code + releases) and Hugging Face Spaces (web deployment). The repositories track the same codebase but have different README.md files due to platform requirements.
 
 ---
 
@@ -141,13 +184,13 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 1. **Download the app:**
    ```bash
-   wget https://github.com/bsphinney/DE-LIMP/releases/latest/download/DE-LIMP.R
-   # Or download from: https://github.com/bsphinney/DE-LIMP/releases
+   git clone https://github.com/bsphinney/DE-LIMP.git
+   cd DE-LIMP
    ```
 
 2. **Run the app:**
    ```r
-   shiny::runApp('DE-LIMP.R', port=3838, launch.browser=TRUE)
+   shiny::runApp('.', port=3838, launch.browser=TRUE)
    ```
 
 3. **First-time setup:**
@@ -168,6 +211,7 @@ dplyr, tidyr, stringr, readr, arrow
 limpa, limma, ComplexHeatmap, clusterProfiler
 org.Hs.eg.db, org.Mm.eg.db, AnnotationDbi
 KSEAapp, ggseqlogo
+MOFA2, basilisk, callr
 
 # Visualization
 ggplot2, ggrepel, ggridges, enrichplot
@@ -218,6 +262,7 @@ httr2, curl
 - **limpa:** Bioconductor package for DIA proteomics
 - **limma:** Ritchie ME et al. (2015) Nucleic Acids Res
 - **DIA-NN:** Demichev V et al. (2020) Nat Methods
+- **MOFA2:** Argelaguet R et al. (2020) Genome Biology
 
 Full methodology available in the app's "Reproducibility > Methodology" tab.
 

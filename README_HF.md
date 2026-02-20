@@ -22,16 +22,17 @@ tags:
 
 An interactive R Shiny application for differential expression analysis of DIA-NN proteomics data. Built on **Limpa** and **Limma** for robust statistics, with **Google Gemini AI** integration.
 
-## ✨ What's New in v2.5
+## ✨ What's New in v3.0
 
+- 🧬 **Multi-Omics MOFA2**: Unsupervised integration of 2-6 data views with variance explained heatmap, factor weights, sample scores, and built-in example datasets (Mouse Brain + TCGA Breast Cancer)
+- 🔬 **DIA-NN Docker Search**: Integrated DIA-NN search via Docker or HPC — submit, monitor, and auto-load results
 - 🧬 **GSEA**: 4 databases (BP/MF/CC/KEGG) with automatic organism detection
 - 🔬 **Phosphoproteomics**: Site-level DE, KSEA kinase activity, motif analysis
 - 🤖 **AI Summary**: Analyzes all contrasts with cross-comparison biomarkers
 - 🗺️ **MDS coloring** by Group, Batch, or covariates
 - 📦 **Complete dataset export** — all contrasts + expression + metadata
-- 🏗️ **Code modularization** — split into app.R + 12 R/ modules for maintainability
 
-**Previous highlights** (v2.1–2.2):
+**Previous highlights** (v2.1–2.5):
 - ❓ Contextual Help System — 15 info modal `?` buttons
 - 🌋 Volcano → Table filtering and improved DE Dashboard
 - 📈 XIC Chromatogram Viewer ([local/HPC only](https://github.com/bsphinney/DE-LIMP))
