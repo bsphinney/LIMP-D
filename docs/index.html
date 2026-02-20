@@ -39,7 +39,7 @@
         a { color: var(--primary-mid); text-decoration: none; transition: color 0.2s; }
         a:hover { color: var(--accent); }
 
-        /* ─── Top Navigation Bar ─── */
+        /* Top Navigation Bar */
         .topnav {
             background: var(--primary);
             color: rgba(255,255,255,0.85);
@@ -61,7 +61,7 @@
         .topnav a:hover { color: #fff; }
         .topnav svg { width: 16px; height: 16px; flex-shrink: 0; }
 
-        /* ─── Hero ─── */
+        /* Hero */
         .hero {
             background: linear-gradient(135deg, #1a365d 0%, #2c5282 50%, #2b6cb0 100%);
             color: #fff;
@@ -98,9 +98,19 @@
         .hero .tagline {
             font-size: 1.2rem;
             opacity: 0.92;
-            max-width: 640px;
+            max-width: 700px;
             margin: 0 auto 2rem;
             line-height: 1.6;
+        }
+        .hero .version-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 20px;
+            padding: 0.2rem 0.8rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
         }
         .hero .btn-group {
             display: flex;
@@ -132,10 +142,10 @@
         .btn-outline:hover { background: rgba(255,255,255,0.2); color: #fff; }
         .btn svg { width: 18px; height: 18px; }
 
-        /* ─── Container ─── */
+        /* Container */
         .container { max-width: 1020px; margin: 0 auto; padding: 0 1.5rem; }
 
-        /* ─── Section ─── */
+        /* Section */
         section { padding: 4rem 0; }
         section.alt { background: var(--bg-alt); }
         section.warm { background: var(--bg-warm); }
@@ -152,7 +162,7 @@
             max-width: 640px;
         }
 
-        /* ─── Resource Banner (YouTube / Core / News) ─── */
+        /* Resource Banner */
         .resources {
             display: grid;
             grid-template-columns: 1fr;
@@ -260,7 +270,7 @@
             font-size: 0.9rem;
         }
 
-        /* ─── Feature Grid ─── */
+        /* Feature Grid */
         .features {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -281,8 +291,21 @@
         }
         .feature-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.35rem; }
         .feature-card p { color: var(--text-light); font-size: 0.88rem; }
+        .feature-card .new-badge {
+            display: inline-block;
+            background: #c6f6d5;
+            color: #22543d;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            margin-left: 0.4rem;
+            vertical-align: middle;
+        }
 
-        /* ─── Steps ─── */
+        /* Steps */
         .steps { counter-reset: step; list-style: none; }
         .steps li {
             counter-increment: step;
@@ -328,7 +351,7 @@
             font-size: 0.88em;
         }
 
-        /* ─── Requirements Table ─── */
+        /* Requirements Table */
         .req-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
         .req-table th, .req-table td {
             text-align: left;
@@ -346,10 +369,32 @@
         .req-table td { font-size: 0.95rem; }
         .req-table tr:hover td { background: #f0f5ff; }
 
-        /* ─── Pipeline ─── */
+        /* Pipeline */
         .pipeline-intro { color: var(--text-mid); font-size: 1rem; margin-bottom: 2rem; }
 
-        /* ─── Footer ─── */
+        /* Deploy options */
+        .deploy-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.25rem;
+            margin-top: 1.5rem;
+        }
+        .deploy-card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            text-align: center;
+        }
+        .deploy-card .deploy-icon {
+            font-size: 2rem;
+            margin-bottom: 0.75rem;
+        }
+        .deploy-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.35rem; }
+        .deploy-card p { color: var(--text-light); font-size: 0.88rem; }
+
+        /* Footer */
         .footer {
             background: var(--primary);
             color: rgba(255,255,255,0.7);
@@ -367,13 +412,13 @@
         .footer a:hover { color: #fff; }
         .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 
-        /* ─── Animations ─── */
+        /* Animations */
         @keyframes pulse {
             0%, 100% { opacity: 0.7; }
             50% { opacity: 1; }
         }
 
-        /* ─── Responsive ─── */
+        /* Responsive */
         @media (max-width: 768px) {
             .hero h1 { font-size: 2.2rem; }
             .hero .tagline { font-size: 1.05rem; }
@@ -381,11 +426,13 @@
             .resource-hero { grid-template-columns: 1fr; }
             .resource-hero .video-wrap { min-height: 220px; }
             .resource-cards { grid-template-columns: 1fr; }
+            .deploy-grid { grid-template-columns: 1fr; }
             .footer .container { flex-direction: column; text-align: center; }
             .topnav { gap: 1rem; }
         }
         @media (min-width: 769px) and (max-width: 960px) {
             .features { grid-template-columns: repeat(2, 1fr); }
+            .deploy-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
     <!-- Inter font -->
@@ -420,14 +467,16 @@
         <div class="container">
             <p class="subtitle">UC Davis Proteomics Core Facility</p>
             <h1>DE-LIMP</h1>
+            <span class="version-badge">v2.5</span>
             <p class="tagline">
-                An interactive R Shiny application for differential expression analysis of DIA-NN proteomics data, powered by Limpa and Limma.
+                An interactive R Shiny application for differential expression analysis of DIA-NN proteomics data, powered by Limpa and Limma. Integrated DIA-NN searching, phosphoproteomics, multi-omics factor analysis, and AI-powered data exploration.
             </p>
             <div class="btn-group">
                 <a href="https://github.com/bsphinney/DE-LIMP" class="btn btn-accent" target="_blank" rel="noopener">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 20.98c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6.02 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.37.81 1.1.81 2.22l-.01 3.29c0 .31.21.69.82.57A12 12 0 0 0 12 .3"/></svg>
                     View on GitHub
                 </a>
+                <a href="https://huggingface.co/spaces/brettsp/de-limp-proteomics" class="btn btn-outline" target="_blank" rel="noopener">Try Online (HF Spaces)</a>
                 <a href="https://github.com/bsphinney/DE-LIMP/releases" class="btn btn-outline" target="_blank" rel="noopener">Download Latest Release</a>
                 <a href="https://www.youtube.com/channel/UCpulhf8gl-HVxACyJUEFPRw" class="btn btn-outline" target="_blank" rel="noopener">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 0 0 .5 6.19 31.7 31.7 0 0 0 0 12a31.7 31.7 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14A31.7 31.7 0 0 0 24 12a31.7 31.7 0 0 0-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>
@@ -444,10 +493,9 @@
             <p class="section-sub">Video tutorials, educational resources, training courses, and the latest news in proteomics research.</p>
             <div class="resources">
 
-                <!-- Featured YouTube Video (Latest from Channel) -->
+                <!-- Featured YouTube Video -->
                 <div class="resource-hero">
                     <div class="video-wrap" id="latest-video-container">
-                        <!-- Loading placeholder -->
                         <div style="background: linear-gradient(135deg, #c4302b 0%, #ff0000 100%); height: 100%; display: flex; align-items: center; justify-content: center; color: white;">
                             <div style="text-align: center;">
                                 <svg width="60" height="60" viewBox="0 0 24 24" fill="white" style="margin-bottom: 1rem; opacity: 0.7; animation: pulse 2s ease-in-out infinite;">
@@ -458,50 +506,36 @@
                         </div>
                     </div>
                     <script>
-                        // Fetch latest video from YouTube channel RSS feed
                         (async function() {
                             const channelId = 'UCpulhf8gl-HVxACyJUEFPRw';
                             const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
-
                             try {
-                                // Use a CORS proxy to fetch the RSS feed
                                 const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`);
                                 const data = await response.json();
                                 const parser = new DOMParser();
                                 const xml = parser.parseFromString(data.contents, 'text/xml');
-
-                                // Get the first (latest) entry
                                 const entry = xml.querySelector('entry');
                                 if (entry) {
                                     const videoId = entry.querySelector('videoId').textContent;
                                     const title = entry.querySelector('title').textContent;
-
-                                    // Create iframe for the latest video
                                     const container = document.getElementById('latest-video-container');
                                     container.innerHTML = `
-                                        <iframe
-                                            src="https://www.youtube.com/embed/${videoId}"
-                                            title="${title}"
+                                        <iframe src="https://www.youtube.com/embed/${videoId}" title="${title}"
                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                            allowfullscreen
-                                            style="position: absolute; inset: 0; width: 100%; height: 100%; border: none;">
-                                        </iframe>
-                                    `;
+                                            allowfullscreen style="position: absolute; inset: 0; width: 100%; height: 100%; border: none;">
+                                        </iframe>`;
                                 }
                             } catch (error) {
-                                console.error('Error loading latest video:', error);
-                                // Fallback to channel link
                                 const container = document.getElementById('latest-video-container');
                                 container.innerHTML = `
-                                    <a href="https://www.youtube.com/channel/${channelId}" target="_blank" rel="noopener" style="background: linear-gradient(135deg, #c4302b 0%, #ff0000 100%); height: 100%; display: flex; align-items: center; justify-content: center; text-decoration: none; color: white;">
+                                    <a href="https://www.youtube.com/channel/UCpulhf8gl-HVxACyJUEFPRw" target="_blank" rel="noopener" style="background: linear-gradient(135deg, #c4302b 0%, #ff0000 100%); height: 100%; display: flex; align-items: center; justify-content: center; text-decoration: none; color: white;">
                                         <div style="text-align: center;">
                                             <svg width="60" height="60" viewBox="0 0 24 24" fill="white" style="margin-bottom: 1rem; opacity: 0.95;">
                                                 <path d="M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 0 0 .5 6.19 31.7 31.7 0 0 0 0 12a31.7 31.7 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 0 0 2.12-2.14A31.7 31.7 0 0 0 24 12a31.7 31.7 0 0 0-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/>
                                             </svg>
                                             <div style="font-size: 1.2rem; font-weight: 700;">Visit YouTube Channel</div>
                                         </div>
-                                    </a>
-                                `;
+                                    </a>`;
                             }
                         })();
                     </script>
@@ -519,14 +553,14 @@
                     </div>
                 </div>
 
-                <!-- Two smaller resource cards -->
+                <!-- Resource cards -->
                 <div class="resource-cards">
                     <div class="resource-card">
                         <div class="card-icon blue">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                         </div>
                         <h3>UC Davis Proteomics Core Facility</h3>
-                        <p>State-of-the-art mass spectrometry services including label-free quantitative profiling, DIA, post-translational modification analysis, amino acid analysis, and Edman sequencing. Serving researchers since 2005.</p>
+                        <p>State-of-the-art mass spectrometry services including label-free quantitative profiling, DIA, post-translational modification analysis, amino acid analysis, and Edman sequencing.</p>
                         <a href="https://proteomics.ucdavis.edu" class="card-link" target="_blank" rel="noopener">
                             proteomics.ucdavis.edu
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -548,7 +582,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                         </div>
                         <h3>Hands-On Proteomics Short Course</h3>
-                        <p>Intensive summer training program covering mass spectrometry fundamentals, data acquisition, and analysis. Learn DIA-NN, Spectronaut, MaxQuant, and more from expert instructors.</p>
+                        <p>Intensive summer training covering mass spectrometry fundamentals, data acquisition, and analysis. Learn DIA-NN, Spectronaut, MaxQuant, and more from expert instructors.</p>
                         <a href="https://proteomics.ucdavis.edu/events/hands-proteomics-short-course" class="card-link" target="_blank" rel="noopener">
                             View course details
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -559,7 +593,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
                         </div>
                         <h3>Google NotebookLM for DE-LIMP</h3>
-                        <p>Explore the key citations behind the methodology used in this program. Use Google's NotebookLM to dive deep into the limpa, limma, and DIA-NN papers that power DE-LIMP's analysis pipeline.</p>
+                        <p>Explore the key citations behind DE-LIMP's methodology. Use Google's NotebookLM to dive deep into the limpa, limma, and DIA-NN papers.</p>
                         <a href="https://notebooklm.google.com/notebook/94c270c3-9721-4962-9659-35810ef57390" class="card-link" target="_blank" rel="noopener">
                             Explore methodology citations
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -575,8 +609,23 @@
     <section>
         <div class="container">
             <h2>Key Features</h2>
-            <p class="section-sub">Everything you need for interactive proteomics differential expression analysis.</p>
+            <p class="section-sub">A complete proteomics analysis platform &mdash; from raw data search to multi-omics integration.</p>
             <div class="features">
+                <div class="feature-card">
+                    <div class="feat-icon">&#x1F50E;</div>
+                    <h3>Integrated DIA-NN Search <span class="new-badge">New</span></h3>
+                    <p>Run DIA-NN searches directly from the app via Docker (local) or HPC (SSH/SLURM). Submit jobs, monitor progress, and auto-load results.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feat-icon">&#x1F9EC;</div>
+                    <h3>Multi-Omics MOFA2 <span class="new-badge">New</span></h3>
+                    <p>Unsupervised multi-omics integration with MOFA2. Combine 2-6 data views to discover shared and view-specific variation patterns.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feat-icon">&#x1F9EA;</div>
+                    <h3>Phosphoproteomics <span class="new-badge">New</span></h3>
+                    <p>Site-level differential expression for phospho-enriched data. Auto-detection of phosphosites, volcano plots, and residue distribution.</p>
+                </div>
                 <div class="feature-card">
                     <div class="feat-icon">&#x1F30B;</div>
                     <h3>Interactive Volcano Plots</h3>
@@ -590,7 +639,17 @@
                 <div class="feature-card">
                     <div class="feat-icon">&#x1F4C8;</div>
                     <h3>QC Trend Monitoring</h3>
-                    <p>Track precursor and protein counts across run order to identify batch effects and quality issues.</p>
+                    <p>Track precursor and protein counts, MS1 signal, and p-value distributions to identify batch effects and quality issues.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feat-icon">&#x1F4CA;</div>
+                    <h3>Gene Set Enrichment <span class="new-badge">New</span></h3>
+                    <p>Multi-database GSEA (BP, MF, CC, KEGG) with dot plots, enrichment maps, ridgeplots, and automatic organism detection.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feat-icon">&#x1F4C9;</div>
+                    <h3>XIC Viewer</h3>
+                    <p>Fragment-level chromatogram inspection with 3 display modes. Spectronaut-style MS2 intensity alignment with inconsistency detection.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feat-icon">&#x1F50D;</div>
@@ -607,6 +666,11 @@
                     <h3>Save &amp; Load Sessions</h3>
                     <p>Save your entire analysis state as an RDS file and reload it later to continue exactly where you left off.</p>
                 </div>
+                <div class="feature-card">
+                    <div class="feat-icon">&#x1F4D6;</div>
+                    <h3>Methodology Report</h3>
+                    <p>Auto-generated methods section ready for publication, covering every analysis step with parameter details and citations.</p>
+                </div>
             </div>
         </div>
     </section>
@@ -616,6 +680,26 @@
         <div class="container">
             <h2>Getting Started</h2>
             <p class="section-sub">Up and running in under five minutes.</p>
+
+            <div class="deploy-grid" style="margin-bottom: 3rem;">
+                <div class="deploy-card">
+                    <div class="deploy-icon">&#x1F4BB;</div>
+                    <h3>Local (R)</h3>
+                    <p>Run natively with R 4.5+. Auto-installs all packages on first launch.</p>
+                </div>
+                <div class="deploy-card">
+                    <div class="deploy-icon">&#x1F433;</div>
+                    <h3>Docker</h3>
+                    <p>One command: <code>docker compose up</code>. Includes DIA-NN search engine.</p>
+                </div>
+                <div class="deploy-card">
+                    <div class="deploy-icon">&#x2601;&#xFE0F;</div>
+                    <h3>Cloud (HF Spaces)</h3>
+                    <p>Try instantly at <a href="https://huggingface.co/spaces/brettsp/de-limp-proteomics" target="_blank">huggingface.co</a>. No install needed.</p>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 1rem; color: var(--primary);">Local Installation</h3>
             <ol class="steps">
                 <li>
                     <h3>Install R 4.5+</h3>
@@ -630,11 +714,29 @@ cd DE-LIMP</code></pre>
                 <li>
                     <h3>Run the app</h3>
                     <p>The app will automatically install any missing packages on first launch.</p>
-                    <pre><code>Rscript -e "shiny::runApp('DE-LIMP.R', port = 3838, launch.browser = TRUE)"</code></pre>
+                    <pre><code>Rscript -e "shiny::runApp('.', port = 3838, launch.browser = TRUE)"</code></pre>
                 </li>
                 <li>
                     <h3>Upload your DIA-NN data</h3>
-                    <p>Use the sidebar to upload a DIA-NN parquet or TSV report, assign experimental groups, and run the analysis pipeline.</p>
+                    <p>Use the sidebar to upload a DIA-NN parquet or TSV report, assign experimental groups, and run the analysis pipeline. Or click "Load Example Data" to try with a built-in dataset.</p>
+                </li>
+            </ol>
+
+            <h3 style="margin-bottom: 1rem; color: var(--primary);">Docker with DIA-NN Search</h3>
+            <ol class="steps">
+                <li>
+                    <h3>Build the DIA-NN Docker image</h3>
+                    <p>DIA-NN is free for academic use but cannot be redistributed. Build it locally:</p>
+                    <pre><code># Mac/Linux:
+bash build_diann_docker.sh
+
+# Windows PowerShell:
+.\build_diann_docker.ps1</code></pre>
+                </li>
+                <li>
+                    <h3>Start DE-LIMP + DIA-NN</h3>
+                    <pre><code>docker compose up</code></pre>
+                    <p>Open <a href="http://localhost:3838">http://localhost:3838</a>. Place raw files in <code>data/raw/</code> and FASTA in <code>data/fasta/</code>.</p>
                 </li>
             </ol>
         </div>
@@ -657,7 +759,9 @@ cd DE-LIMP</code></pre>
                     <tr><td>Bioconductor</td><td>3.22+</td><td>Automatically configured with R 4.5</td></tr>
                     <tr><td>limpa</td><td>Latest</td><td>Core analysis engine (auto-installed)</td></tr>
                     <tr><td>limma</td><td>Latest</td><td>Statistical framework (auto-installed)</td></tr>
-                    <tr><td>Shiny</td><td>Latest</td><td>Web framework (auto-installed)</td></tr>
+                    <tr><td>MOFA2</td><td>Latest</td><td>Multi-omics factor analysis (auto-installed)</td></tr>
+                    <tr><td>Shiny + bslib</td><td>Latest</td><td>Web framework (auto-installed)</td></tr>
+                    <tr><td>Docker</td><td>20+</td><td>Optional &mdash; for DIA-NN search integration</td></tr>
                 </tbody>
             </table>
         </div>
@@ -671,7 +775,7 @@ cd DE-LIMP</code></pre>
             <ol class="steps">
                 <li>
                     <h3>Data Import</h3>
-                    <p>Load DIA-NN report files (parquet or TSV) with <code>readDIANN()</code>.</p>
+                    <p>Load DIA-NN report files (parquet or TSV) with <code>readDIANN()</code>. Optionally search raw files directly with DIA-NN via the integrated search tab.</p>
                 </li>
                 <li>
                     <h3>Normalization</h3>
@@ -685,6 +789,14 @@ cd DE-LIMP</code></pre>
                     <h3>Differential Expression</h3>
                     <p>Fit linear models with <code>dpcDE()</code>, apply contrasts, and compute empirical Bayes moderated statistics with <code>eBayes()</code>. FDR correction via Benjamini-Hochberg.</p>
                 </li>
+                <li>
+                    <h3>Phosphoproteomics (optional)</h3>
+                    <p>Site-level differential expression for phospho-enriched datasets. Auto-detects phosphosites from DIA-NN reports or accepts pre-computed site matrices.</p>
+                </li>
+                <li>
+                    <h3>Enrichment &amp; Integration</h3>
+                    <p>Gene set enrichment analysis (GO, KEGG) with <code>clusterProfiler</code>. Multi-omics factor analysis with <code>MOFA2</code> to integrate proteomics, phosphoproteomics, transcriptomics, and more.</p>
+                </li>
             </ol>
         </div>
     </section>
@@ -693,14 +805,16 @@ cd DE-LIMP</code></pre>
     <div class="footer">
         <div class="container">
             <div>
-                <strong style="color:#fff;">DE-LIMP</strong> &mdash; Open-source proteomics analysis.<br>
+                <strong style="color:#fff;">DE-LIMP</strong> v2.5 &mdash; Open-source proteomics analysis.<br>
                 Built with <a href="https://shiny.posit.co/" target="_blank" rel="noopener">Shiny</a>,
-                <a href="https://bioconductor.org/packages/limpa/" target="_blank" rel="noopener">limpa</a>, and
-                <a href="https://bioconductor.org/packages/limma/" target="_blank" rel="noopener">limma</a>.
+                <a href="https://bioconductor.org/packages/limpa/" target="_blank" rel="noopener">limpa</a>,
+                <a href="https://bioconductor.org/packages/limma/" target="_blank" rel="noopener">limma</a>, and
+                <a href="https://bioconductor.org/packages/MOFA2/" target="_blank" rel="noopener">MOFA2</a>.
             </div>
             <div class="footer-links">
                 <a href="https://github.com/bsphinney/DE-LIMP" target="_blank" rel="noopener">GitHub</a>
                 <a href="https://github.com/bsphinney/DE-LIMP/issues" target="_blank" rel="noopener">Report an Issue</a>
+                <a href="https://huggingface.co/spaces/brettsp/de-limp-proteomics" target="_blank" rel="noopener">HF Spaces</a>
                 <a href="https://www.youtube.com/channel/UCpulhf8gl-HVxACyJUEFPRw" target="_blank" rel="noopener">YouTube</a>
                 <a href="https://proteomics.ucdavis.edu" target="_blank" rel="noopener">Core Facility</a>
                 <a href="https://proteomicsnews.blogspot.com/" target="_blank" rel="noopener">Proteomics News</a>
