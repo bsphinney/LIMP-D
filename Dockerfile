@@ -40,6 +40,7 @@ RUN R -e "BiocManager::install(c('clusterProfiler', 'enrichplot'), ask=FALSE, up
 # 4. Copy the App Files into the image
 COPY app.R /srv/shiny-server/app.R
 COPY R/ /srv/shiny-server/R/
+COPY contaminants/ /srv/shiny-server/contaminants/
 
 # (Optional: If you have your logo file locally, uncomment the next line)
 # COPY funny_scientist.png /srv/shiny-server/funny_scientist.png
