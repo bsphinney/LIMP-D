@@ -447,8 +447,10 @@ server_session <- function(input, output, session, values, add_to_log) {
         sprintf("MS2 %s ppm, MS1 %s ppm", sp$mass_acc, sp$mass_acc_ms1)
       }
 
-      # DIA-NN engine description (Docker vs HPC/Singularity)
-      engine_desc <- if (!is.null(ss$docker_image)) {
+      # DIA-NN engine description (Local vs Docker vs HPC/Singularity)
+      engine_desc <- if (!is.null(ss$local)) {
+        "DIA-NN (local binary)"
+      } else if (!is.null(ss$docker_image)) {
         sprintf("DIA-NN (%s, Docker)", ss$docker_image)
       } else if (!is.null(ss$diann_sif)) {
         sprintf("DIA-NN (%s)", ss$diann_sif)
@@ -457,7 +459,9 @@ server_session <- function(input, output, session, values, add_to_log) {
       }
 
       # Compute resource description
-      resource_desc <- if (!is.null(ss$docker)) {
+      resource_desc <- if (!is.null(ss$local)) {
+        sprintf("Local execution: %d threads.", ss$local$threads)
+      } else if (!is.null(ss$docker)) {
         sprintf("Docker resources: %d CPUs, %d GB RAM (image: %s).",
                 ss$docker$cpus, ss$docker$mem_gb, ss$docker$image)
       } else if (!is.null(ss$slurm)) {

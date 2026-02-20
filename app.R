@@ -171,8 +171,12 @@ if (!is_hf_space && nzchar(Sys.which("docker"))) {
   }
 }
 
+# Local DIA-NN binary detection (embedded in Docker container or installed on host)
+local_diann <- nzchar(Sys.which("diann")) || nzchar(Sys.which("diann-linux"))
+delimp_data_dir <- Sys.getenv("DELIMP_DATA_DIR", "")
+
 # Combined flag — at least one backend available
-search_enabled <- docker_available || hpc_available
+search_enabled <- docker_available || hpc_available || local_diann
 
 # Conditionally load search-related packages
 if (search_enabled) {
@@ -224,7 +228,8 @@ local({
   }
 })
 
-ui <- build_ui(is_hf_space, search_enabled, docker_available, hpc_available, local_sbatch)
+ui <- build_ui(is_hf_space, search_enabled, docker_available, hpc_available, local_sbatch,
+               local_diann, delimp_data_dir)
 
 # ==============================================================================
 #  SERVER LOGIC — Thin orchestrator calling R/ modules
@@ -299,7 +304,8 @@ server <- function(input, output, session) {
   server_xic(input, output, session, values, is_hf_space)
   server_phospho(input, output, session, values, add_to_log)
   server_search(input, output, session, values, add_to_log,
-                search_enabled, docker_available, docker_config, hpc_available, local_sbatch)
+                search_enabled, docker_available, docker_config, hpc_available, local_sbatch,
+                local_diann, delimp_data_dir)
   server_session(input, output, session, values, add_to_log)
 }
 

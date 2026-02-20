@@ -1,14 +1,15 @@
 # ==============================================================================
 #  server_search.R
 #  DIA-NN Search Integration — New Search tab server logic
-#  Supports two backends: Local Docker and HPC (SSH/SLURM).
+#  Supports three backends: Local embedded, Local Docker, and HPC (SSH/SLURM).
 #  Handles: file browsing, UniProt FASTA download, sbatch generation,
-#  Docker execution, job submission, monitoring, auto-load, and job queue.
+#  Docker execution, local execution, job submission, monitoring, auto-load, and job queue.
 # ==============================================================================
 
 server_search <- function(input, output, session, values, add_to_log,
                           search_enabled, docker_available, docker_config,
-                          hpc_available, local_sbatch) {
+                          hpc_available, local_sbatch,
+                          local_diann = FALSE, delimp_data_dir = "") {
 
   # Early return if no search backend available
   if (!search_enabled) return(invisible())
@@ -101,6 +102,40 @@ server_search <- function(input, output, session, values, add_to_log,
   output$docker_output_path <- renderText({
     dir_chosen <- shinyFiles::parseDirPath(volumes, input$docker_output_dir)
     if (length(dir_chosen) > 0) as.character(dir_chosen) else "(not selected)"
+  })
+
+  # ============================================================================
+  #    Local (Embedded) Backend UI
+  # ============================================================================
+
+  # Local resource controls (threads slider)
+  output$local_resources_ui <- renderUI({
+    n_cores <- parallel::detectCores(logical = TRUE)
+    sliderInput("local_diann_threads", "Threads:",
+      min = 1, max = n_cores,
+      value = min(n_cores, 16), step = 1)
+  })
+
+  # Local output path display (native mode — container mode uses fixed textInput)
+  output$local_output_path <- renderText({
+    dir_chosen <- shinyFiles::parseDirPath(volumes, input$local_output_dir_browse)
+    if (length(dir_chosen) > 0) as.character(dir_chosen) else "(not selected)"
+  })
+
+  # Local output dir observer (native mode — update output_base when user picks a folder)
+  observeEvent(input$local_output_dir_browse, {
+    if (is.integer(input$local_output_dir_browse)) return()
+    dir_path <- shinyFiles::parseDirPath(volumes, input$local_output_dir_browse)
+    if (length(dir_path) > 0 && nzchar(dir_path)) {
+      output_base(as.character(dir_path))
+    }
+  })
+
+  # Local output dir observer (container mode — update output_base from text input)
+  observeEvent(input$local_output_dir, {
+    if (nzchar(input$local_output_dir %||% "")) {
+      output_base(input$local_output_dir)
+    }
   })
 
   # ============================================================================
@@ -222,7 +257,11 @@ server_search <- function(input, output, session, values, add_to_log,
   #    shinyFiles Initialization (local mode only)
   # ============================================================================
 
-  volumes <- c(Home = Sys.getenv("HOME"), Root = "/")
+  volumes <- if (nzchar(delimp_data_dir)) {
+    c(Data = delimp_data_dir)
+  } else {
+    c(Home = Sys.getenv("HOME"), Root = "/")
+  }
 
   shinyFiles::shinyDirChoose(input, "raw_data_dir", roots = volumes, session = session)
   shinyFiles::shinyDirChoose(input, "fasta_browse_dir", roots = volumes, session = session)
@@ -230,6 +269,9 @@ server_search <- function(input, output, session, values, add_to_log,
   shinyFiles::shinyFileChoose(input, "lib_file", roots = volumes, session = session,
     filetypes = c("speclib", "tsv", "csv"))
   shinyFiles::shinyDirChoose(input, "docker_output_dir", roots = volumes, session = session)
+  if (local_diann && !nzchar(delimp_data_dir)) {
+    shinyFiles::shinyDirChoose(input, "local_output_dir_browse", roots = volumes, session = session)
+  }
 
   # ============================================================================
   #    File Selection Observers
@@ -621,7 +663,13 @@ server_search <- function(input, output, session, values, add_to_log,
     }
 
     # Backend-specific validation
-    if (backend == "docker") {
+    if (backend == "local") {
+      diann_bin <- Sys.which("diann")
+      if (!nzchar(diann_bin)) diann_bin <- Sys.which("diann-linux")
+      if (!nzchar(diann_bin)) {
+        errors <- c(errors, "DIA-NN binary not found on PATH.")
+      }
+    } else if (backend == "docker") {
       img <- input$docker_image_name %||% docker_config$diann_image %||% "diann:2.0"
       img_check <- check_diann_image(img)
       if (!img_check$exists) {
@@ -656,7 +704,10 @@ server_search <- function(input, output, session, values, add_to_log,
     analysis_name <- gsub("[^A-Za-z0-9._-]", "_", input$analysis_name)
     output_dir <- file.path(output_base(), analysis_name)
 
-    if (backend == "docker") {
+    if (backend == "local") {
+      dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+      cfg <- NULL
+    } else if (backend == "docker") {
       dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
       cfg <- NULL
     } else {
@@ -733,7 +784,75 @@ server_search <- function(input, output, session, values, add_to_log,
     #  Backend-specific submission
     # ====================================================================
 
-    if (backend == "docker") {
+    if (backend == "local") {
+      # --- Local (embedded) submission via processx ---
+      threads <- input$local_diann_threads %||% 4
+
+      speclib_path <- if (!is.null(values$diann_speclib) && nzchar(values$diann_speclib)) {
+        values$diann_speclib
+      } else NULL
+      diann_flags <- build_diann_flags(search_params, input$search_mode,
+                                        input$diann_normalization, speclib_path)
+
+      log_file <- file.path(output_dir, paste0("diann_", analysis_name, ".log"))
+
+      submit_result <- tryCatch({
+        result <- run_local_diann(
+          raw_files = values$diann_raw_files$full_path,
+          fasta_files = fasta_files,
+          output_dir = output_dir,
+          diann_flags = diann_flags,
+          threads = threads,
+          log_file = log_file,
+          speclib_path = speclib_path
+        )
+        list(success = TRUE, process = result$process, pid = result$pid, log_file = result$log_file)
+      }, error = function(e) {
+        list(success = FALSE, error = e$message)
+      })
+
+      if (!submit_result$success) {
+        showNotification(paste("Local DIA-NN launch failed:", submit_result$error),
+          type = "error", duration = 15)
+        return()
+      }
+
+      job_id <- sprintf("local_%s_%s", analysis_name, format(Sys.time(), "%Y%m%d_%H%M%S"))
+
+      # Create local job entry
+      job_entry <- list(
+        job_id = job_id,
+        backend = "local",
+        name = analysis_name,
+        status = "running",
+        output_dir = output_dir,
+        submitted_at = Sys.time(),
+        n_files = nrow(values$diann_raw_files),
+        search_mode = input$search_mode,
+        search_settings = list(
+          search_params = search_params,
+          fasta_files = fasta_files,
+          contaminant_library = contam_lib,
+          n_raw_files = nrow(values$diann_raw_files),
+          raw_file_type = if (nrow(values$diann_raw_files) > 0)
+            tools::file_ext(values$diann_raw_files$name[1]) else "unknown",
+          search_mode = input$search_mode,
+          normalization = input$diann_normalization,
+          speclib = if (!is.null(values$diann_speclib) && nzchar(values$diann_speclib))
+            basename(values$diann_speclib) else NULL,
+          local = list(threads = threads)
+        ),
+        auto_load = input$auto_load_results,
+        log_content = "",
+        log_file = log_file,
+        pid = submit_result$pid,
+        process = submit_result$process,
+        completed_at = NULL,
+        loaded = FALSE,
+        is_ssh = FALSE
+      )
+
+    } else if (backend == "docker") {
       # --- Docker submission ---
       img <- input$docker_image_name %||% docker_config$diann_image %||% "diann:2.0"
       cpus <- input$docker_cpus %||% 8
@@ -986,7 +1105,32 @@ server_search <- function(input, output, session, values, add_to_log,
     for (i in seq_along(jobs)) {
       if (!jobs[[i]]$status %in% c("queued", "running")) next
 
-      if (isTRUE(jobs[[i]]$backend == "docker")) {
+      if (isTRUE(jobs[[i]]$backend == "local")) {
+        # --- Local (embedded) monitoring via processx ---
+        proc <- jobs[[i]]$process
+        log_path <- jobs[[i]]$log_file
+
+        if (!is.null(proc) && inherits(proc, "process")) {
+          result <- check_local_diann_status(proc, log_path)
+          new_status <- result$status
+          if (nzchar(result$log_tail)) {
+            jobs[[i]]$log_content <- result$log_tail
+            changed <- TRUE
+          }
+        } else {
+          # Process handle lost (e.g., app restart) — check log file for completion markers
+          new_status <- "unknown"
+          if (!is.null(log_path) && file.exists(log_path)) {
+            log_lines <- tryCatch(readLines(log_path, warn = FALSE), error = function(e) character(0))
+            if (any(grepl("Processing finished|report.*saved", log_lines, ignore.case = TRUE))) {
+              new_status <- "completed"
+            }
+            jobs[[i]]$log_content <- paste(tail(log_lines, 30), collapse = "\n")
+            changed <- TRUE
+          }
+        }
+
+      } else if (isTRUE(jobs[[i]]$backend == "docker")) {
         # --- Docker monitoring ---
         cid <- jobs[[i]]$container_id %||% jobs[[i]]$job_id
         result <- check_docker_container_status(cid)
@@ -1239,7 +1383,10 @@ server_search <- function(input, output, session, values, add_to_log,
         sprintf("%.1f hrs", as.numeric(elapsed) / 60)
       }
 
-      backend_icon <- if (isTRUE(job$backend == "docker")) {
+      backend_icon <- if (isTRUE(job$backend == "local")) {
+        span(class = "badge bg-success text-white", style = "font-size: 0.7em; margin-right: 4px;",
+          icon("microchip"), " Local")
+      } else if (isTRUE(job$backend == "docker")) {
         span(class = "badge bg-info text-white", style = "font-size: 0.7em; margin-right: 4px;",
           icon("docker", lib = "font-awesome"), " Docker")
       } else {
@@ -1330,7 +1477,23 @@ server_search <- function(input, output, session, values, add_to_log,
         observeEvent(input[[sprintf("refresh_job_%d", idx)]], {
           job <- values$diann_jobs[[idx]]
           tryCatch({
-            if (isTRUE(job$backend == "docker")) {
+            if (isTRUE(job$backend == "local")) {
+              proc <- job$process
+              log_path <- job$log_file
+              if (!is.null(proc) && inherits(proc, "process")) {
+                result <- check_local_diann_status(proc, log_path)
+                new_status <- result$status
+              } else {
+                # Process handle lost — check log
+                new_status <- "unknown"
+                if (!is.null(log_path) && file.exists(log_path)) {
+                  log_lines <- tryCatch(readLines(log_path, warn = FALSE), error = function(e) character(0))
+                  if (any(grepl("Processing finished|report.*saved", log_lines, ignore.case = TRUE))) {
+                    new_status <- "completed"
+                  }
+                }
+              }
+            } else if (isTRUE(job$backend == "docker")) {
               cid <- job$container_id %||% job$job_id
               result <- check_docker_container_status(cid)
               new_status <- result$status
@@ -1355,7 +1518,13 @@ server_search <- function(input, output, session, values, add_to_log,
         observeEvent(input[[sprintf("cancel_job_%d", idx)]], {
           job <- values$diann_jobs[[idx]]
           tryCatch({
-            if (isTRUE(job$backend == "docker")) {
+            if (isTRUE(job$backend == "local")) {
+              # Local: kill processx process
+              proc <- job$process
+              if (!is.null(proc) && inherits(proc, "process") && proc$is_alive()) {
+                proc$kill()
+              }
+            } else if (isTRUE(job$backend == "docker")) {
               # Docker: stop + remove container
               cid <- job$container_id %||% job$job_id
               system2("docker", c("stop", cid), stdout = TRUE, stderr = TRUE)
@@ -1498,7 +1667,22 @@ server_search <- function(input, output, session, values, add_to_log,
     for (i in seq_along(jobs)) {
       if (jobs[[i]]$status != "unknown") next
       tryCatch({
-        if (isTRUE(jobs[[i]]$backend == "docker")) {
+        if (isTRUE(jobs[[i]]$backend == "local")) {
+          proc <- jobs[[i]]$process
+          log_path <- jobs[[i]]$log_file
+          if (!is.null(proc) && inherits(proc, "process")) {
+            result <- check_local_diann_status(proc, log_path)
+            new_status <- result$status
+          } else {
+            new_status <- "unknown"
+            if (!is.null(log_path) && file.exists(log_path)) {
+              log_lines <- tryCatch(readLines(log_path, warn = FALSE), error = function(e) character(0))
+              if (any(grepl("Processing finished|report.*saved", log_lines, ignore.case = TRUE))) {
+                new_status <- "completed"
+              }
+            }
+          }
+        } else if (isTRUE(jobs[[i]]$backend == "docker")) {
           cid <- jobs[[i]]$container_id %||% jobs[[i]]$job_id
           result <- check_docker_container_status(cid)
           new_status <- result$status

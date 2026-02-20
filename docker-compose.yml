@@ -1,0 +1,36 @@
+# =============================================================================
+# docker-compose.yml — Run DE-LIMP with embedded DIA-NN search
+# =============================================================================
+#
+# Prerequisites:
+#   1. Build DIA-NN image first:
+#      bash build_diann_docker.sh          (Mac/Linux)
+#      .\build_diann_docker.ps1            (Windows PowerShell)
+#
+#   2. Create data directory:
+#      mkdir -p data/raw data/fasta data/output
+#
+# Usage:
+#   docker compose up                      (start DE-LIMP)
+#   docker compose up --build              (rebuild after code changes)
+#   docker compose down                    (stop)
+#
+# Then open: http://localhost:3838
+#
+# Place your files:
+#   data/raw/       ← .d / .raw / .mzML files
+#   data/fasta/     ← .fasta files
+#   data/output/    ← DIA-NN results appear here
+# =============================================================================
+
+services:
+  delimp:
+    build:
+      context: .
+      dockerfile: Dockerfile.search
+    ports:
+      - "3838:3838"
+    volumes:
+      - ./data:/data
+    environment:
+      - DELIMP_DATA_DIR=/data

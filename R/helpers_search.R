@@ -647,6 +647,82 @@ check_docker_container_status <- function(container_id) {
 }
 
 # =============================================================================
+# Local DIA-NN Execution (embedded binary — no Docker/SLURM)
+# =============================================================================
+
+#' Launch DIA-NN as a background process via processx
+#' @param raw_files Character vector of raw file paths
+#' @param fasta_files Character vector of FASTA file paths
+#' @param output_dir Output directory path
+#' @param diann_flags Character vector of DIA-NN CLI flags (from build_diann_flags)
+#' @param threads Number of threads
+#' @param log_file Path to write stdout+stderr log
+#' @param speclib_path Optional spectral library path
+#' @param report_name Output report filename (default: report.parquet)
+#' @return list(process, pid, log_file)
+run_local_diann <- function(raw_files, fasta_files, output_dir,
+                             diann_flags, threads, log_file,
+                             speclib_path = NULL, report_name = "report.parquet") {
+  diann_bin <- Sys.which("diann")
+  if (!nzchar(diann_bin)) diann_bin <- Sys.which("diann-linux")
+  if (!nzchar(diann_bin)) stop("DIA-NN binary not found on PATH")
+
+  # Build argument vector — each flag is a separate element
+  args <- c()
+  for (f in raw_files) args <- c(args, "--f", f)
+  for (f in fasta_files) args <- c(args, "--fasta", f)
+  args <- c(args, "--out", file.path(output_dir, report_name))
+  args <- c(args, "--threads", as.character(threads))
+
+  if (!is.null(speclib_path) && nzchar(speclib_path)) {
+    args <- c(args, "--lib", speclib_path)
+  }
+
+  # Add DIA-NN flags (each may be "--flag value" — split on first space)
+  for (flag in diann_flags) {
+    parts <- strsplit(flag, " ", fixed = TRUE)[[1]]
+    args <- c(args, parts)
+  }
+
+  # Ensure output directory exists
+  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
+  # Launch as background process
+  proc <- processx::process$new(
+    command = diann_bin,
+    args = args,
+    stdout = log_file,
+    stderr = log_file,
+    cleanup_tree = TRUE
+  )
+
+  list(process = proc, pid = proc$get_pid(), log_file = log_file)
+}
+
+#' Check status of a locally running DIA-NN process
+#' @param proc processx::process object
+#' @param log_file Path to the log file
+#' @return list(status, exit_code, log_tail)
+check_local_diann_status <- function(proc, log_file) {
+  alive <- tryCatch(proc$is_alive(), error = function(e) FALSE)
+  exit_code <- if (!alive) {
+    tryCatch(proc$get_exit_status(), error = function(e) NA_integer_)
+  } else NA_integer_
+
+  status <- if (alive) "running"
+            else if (!is.na(exit_code) && exit_code == 0) "completed"
+            else if (!is.na(exit_code)) "failed"
+            else "unknown"
+
+  log_tail <- tryCatch({
+    lines <- readLines(log_file, warn = FALSE)
+    iconv(paste(tail(lines, 30), collapse = "\n"), from = "", to = "UTF-8", sub = "")
+  }, error = function(e) "")
+
+  list(status = status, exit_code = exit_code, log_tail = log_tail)
+}
+
+# =============================================================================
 # Job Recovery Functions
 # =============================================================================
 

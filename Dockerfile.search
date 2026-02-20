@@ -1,0 +1,78 @@
+# =============================================================================
+# Dockerfile.search — DE-LIMP with embedded DIA-NN for local searching
+# =============================================================================
+# Multi-stage build: copies DIA-NN from user's pre-built image into DE-LIMP.
+# Requires: diann:2.0 image (build with build_diann_docker.sh first)
+#
+# Usage:
+#   docker compose up          (recommended — uses docker-compose.yml)
+#   docker build -f Dockerfile.search -t delimp-search .
+# =============================================================================
+
+# Stage 1: Get DIA-NN binaries from user's pre-built image
+FROM diann:2.0 AS diann
+
+# Stage 2: DE-LIMP app with DIA-NN embedded
+FROM rocker/shiny:4.5.0
+
+# 1. System dependencies (same as base Dockerfile + wget for .NET install)
+RUN apt-get update && apt-get install -y \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libxml2-dev \
+    libfontconfig1-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libfreetype6-dev \
+    libpng-dev \
+    libtiff5-dev \
+    libjpeg-dev \
+    libcairo2-dev \
+    libxt-dev \
+    cmake \
+    openssh-client \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. CRAN packages
+RUN R -e "install.packages(c('bslib', 'readr', 'tibble', 'dplyr', 'tidyr', 'ggplot2', 'httr2', 'rhandsontable', 'DT', 'arrow', 'shinyjs', 'plotly', 'stringr', 'ggrepel', 'remotes', 'BiocManager', 'markdown', 'shinyFiles', 'jsonlite', 'processx'), repos='https://cloud.r-project.org/')"
+
+RUN R -e "install.packages(c('KSEAapp', 'ggseqlogo'), repos='https://cloud.r-project.org/')"
+RUN R -e "install.packages(c('systemfonts', 'gdtools', 'Rcpp'), repos='https://cloud.r-project.org/')"
+RUN R -e "install.packages(c('ggraph', 'graphlayouts', 'tidygraph', 'scatterpie', 'shadowtext', 'ggforce'), repos='https://cloud.r-project.org/')"
+
+# 3. Bioconductor packages
+RUN R -e "BiocManager::install(c('DOSE', 'GOSemSim', 'yulab.utils'), ask=FALSE, update=FALSE)"
+RUN R -e "BiocManager::install(c('limma', 'limpa', 'ComplexHeatmap', 'AnnotationDbi', 'org.Hs.eg.db', 'org.Mm.eg.db', 'ggridges'), ask=FALSE, update=FALSE)"
+RUN R -e "BiocManager::install(c('ggtree', 'ggtangle'), ask=FALSE, update=FALSE)"
+RUN R -e "BiocManager::install(c('clusterProfiler', 'enrichplot'), ask=FALSE, update=FALSE)"
+
+# 4. Copy DIA-NN binaries + shared libraries from Stage 1
+COPY --from=diann /opt/diann/ /opt/diann/
+RUN chmod +x /opt/diann/diann-linux 2>/dev/null || true && \
+    ln -sf /opt/diann/diann-linux /usr/local/bin/diann
+ENV LD_LIBRARY_PATH="/opt/diann:${LD_LIBRARY_PATH}"
+
+# 5. Install .NET SDK 8.0 (DIA-NN needs this for Thermo .raw file reading)
+RUN wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh && \
+    chmod +x /tmp/dotnet-install.sh && \
+    /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet && \
+    ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet && \
+    rm /tmp/dotnet-install.sh
+ENV DOTNET_ROOT=/usr/share/dotnet
+ENV PATH="$PATH:/usr/share/dotnet"
+
+# 6. Copy DE-LIMP app
+COPY app.R /srv/shiny-server/app.R
+COPY R/ /srv/shiny-server/R/
+COPY contaminants/ /srv/shiny-server/contaminants/
+
+# 7. Create data mount point with subdirectories
+RUN mkdir -p /data/raw /data/fasta /data/output
+
+# 8. Environment: signal to app.R that we're in Docker with local DIA-NN
+ENV DELIMP_DATA_DIR=/data
+
+EXPOSE 3838
+
+CMD ["R", "-e", "shiny::runApp('/srv/shiny-server/', host='0.0.0.0', port=3838)"]

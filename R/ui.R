@@ -5,7 +5,8 @@
 
 build_ui <- function(is_hf_space, search_enabled = FALSE,
                      docker_available = FALSE, hpc_available = FALSE,
-                     local_sbatch = FALSE) {
+                     local_sbatch = FALSE, local_diann = FALSE,
+                     delimp_data_dir = "") {
   page_sidebar(
   title = "DE-LIMP Proteomics",
   theme = bs_theme(bootswatch = "flatly"),
@@ -225,7 +226,7 @@ build_ui <- function(is_hf_space, search_enabled = FALSE,
             tags$h6(icon("hard-drive"), " Raw Data"),
             # Local file browser: shown for Docker backend OR local-sbatch HPC
             conditionalPanel(
-              "input.search_backend == 'docker' || (input.search_backend == 'hpc' && input.search_connection_mode != 'ssh')",
+              "input.search_backend == 'local' || input.search_backend == 'docker' || (input.search_backend == 'hpc' && input.search_connection_mode != 'ssh')",
               shinyFiles::shinyDirButton("raw_data_dir", "Select Raw Data Folder",
                 title = "Choose directory with .d / .raw / .mzML files",
                 class = "btn-outline-primary btn-sm w-100")
@@ -287,7 +288,7 @@ build_ui <- function(is_hf_space, search_enabled = FALSE,
             # --- Browse / path source ---
             conditionalPanel("input.fasta_source == 'browse'",
               conditionalPanel(
-                "input.search_backend == 'docker' || (input.search_backend == 'hpc' && input.search_connection_mode != 'ssh')",
+                "input.search_backend == 'local' || input.search_backend == 'docker' || (input.search_backend == 'hpc' && input.search_connection_mode != 'ssh')",
                 shinyFiles::shinyDirButton("fasta_browse_dir", "Browse for FASTA Folder",
                   title = "Navigate to FASTA directory",
                   class = "btn-outline-primary btn-sm w-100")
@@ -327,7 +328,7 @@ build_ui <- function(is_hf_space, search_enabled = FALSE,
             hr(),
             tags$h6(icon("book"), " Spectral Library (optional)"),
             conditionalPanel(
-              "input.search_backend == 'docker' || (input.search_backend == 'hpc' && input.search_connection_mode != 'ssh')",
+              "input.search_backend == 'local' || input.search_backend == 'docker' || (input.search_backend == 'hpc' && input.search_connection_mode != 'ssh')",
               shinyFiles::shinyFilesButton("lib_file", "Select .speclib File",
                 title = "Choose spectral library",
                 class = "btn-outline-secondary btn-sm w-100",
@@ -472,19 +473,52 @@ build_ui <- function(is_hf_space, search_enabled = FALSE,
 
             # Backend selector
             tags$h6(icon("microchip"), " Compute Backend"),
-            if (docker_available && hpc_available) {
-              radioButtons("search_backend", NULL,
-                choices = c("Local (Docker)" = "docker", "HPC (SSH/SLURM)" = "hpc"),
-                selected = "docker", inline = TRUE)
-            } else {
-              # Single backend — use real Shiny input (hidden) so conditionalPanel works
-              div(style = "display: none;",
+            {
+              backends <- c()
+              if (local_diann)      backends <- c(backends, "Local (Embedded)" = "local")
+              if (docker_available) backends <- c(backends, "Local (Docker)" = "docker")
+              if (hpc_available)    backends <- c(backends, "HPC (SSH/SLURM)" = "hpc")
+              default <- names(backends)[1]
+              # Unwrap the named values for radioButtons
+              default_val <- unname(backends[1])
+
+              if (length(backends) > 1) {
                 radioButtons("search_backend", NULL,
-                  choices = if (docker_available) c("Local (Docker)" = "docker")
-                            else c("HPC (SSH/SLURM)" = "hpc"),
-                  selected = if (docker_available) "docker" else "hpc")
-              )
+                  choices = backends, selected = default_val, inline = TRUE)
+              } else {
+                # Single backend — use real Shiny input (hidden) so conditionalPanel works
+                div(style = "display: none;",
+                  radioButtons("search_backend", NULL,
+                    choices = backends, selected = default_val))
+              }
             },
+
+            # ---------- Local (embedded) backend controls ----------
+            conditionalPanel("input.search_backend == 'local'",
+              tags$div(class = "alert alert-success py-1 px-2",
+                style = "font-size: 0.85em;",
+                icon("check-circle"),
+                " DIA-NN binary detected. Ready for local searches."),
+              hr(),
+              tags$h6("Resources"),
+              uiOutput("local_resources_ui"),
+              hr(),
+              tags$h6("Output Directory"),
+              if (nzchar(delimp_data_dir)) {
+                # Container mode: fixed output path
+                textInput("local_output_dir", NULL,
+                  value = file.path(delimp_data_dir, "output"))
+              } else {
+                # Native mode: file browser
+                tagList(
+                  shinyFiles::shinyDirButton("local_output_dir_browse",
+                    "Select Output Folder",
+                    title = "Choose output directory for DIA-NN results",
+                    class = "btn-outline-primary btn-sm w-100"),
+                  verbatimTextOutput("local_output_path")
+                )
+              }
+            ),
 
             # ---------- Docker backend controls ----------
             conditionalPanel("input.search_backend == 'docker'",
